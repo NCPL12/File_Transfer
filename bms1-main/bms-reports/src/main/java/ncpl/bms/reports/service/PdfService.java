@@ -1,0 +1,744 @@
+
+
+        package ncpl.bms.reports.service;
+        import java.sql.Types;
+        import java.text.SimpleDateFormat;
+        import java.util.*;
+        import java.time.LocalDate;
+        import java.time.format.DateTimeFormatter;
+        import com.lowagie.text.Paragraph;
+        import com.lowagie.text.*;
+        import com.lowagie.text.pdf.*;
+        import lombok.extern.slf4j.Slf4j;
+        import ncpl.bms.reports.model.dao.ReportTemplate;
+        import ncpl.bms.reports.model.dto.GroupDTO;
+        import ncpl.bms.reports.model.dto.ReportDTO;
+        import ncpl.bms.reports.util.DateConverter;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.beans.factory.annotation.Value;
+        import org.springframework.core.io.ClassPathResource;
+        import org.springframework.stereotype.Component;
+        import java.io.IOException;
+        import java.text.SimpleDateFormat;
+        import java.util.Date;
+        import com.lowagie.text.Document;
+        import com.lowagie.text.Element;
+        import com.lowagie.text.PageSize;
+        import com.lowagie.text.Phrase;
+        import com.lowagie.text.pdf.PdfPCell;
+        import com.lowagie.text.pdf.PdfPTable;
+        import com.lowagie.text.pdf.PdfWriter;
+        import java.io.ByteArrayOutputStream;
+        import java.sql.PreparedStatement;
+        import org.springframework.jdbc.core.JdbcTemplate;
+        import java.time.LocalDateTime;
+        import java.io.ByteArrayInputStream;
+        import java.util.List;
+
+        @Component
+        @Slf4j
+        public class PdfService {
+
+            @Autowired
+            private ReportDataService reportDataService;
+
+            @Autowired
+            private ReportTemplateService templateService;
+
+            @Value("${report.address}")
+            private String address;
+
+            @Autowired
+            private JdbcTemplate jdbcTemplate;
+
+            @Value("${report.heading}")
+            private String reportHeading;
+
+            @Autowired
+            private DateConverter dateConverter;
+
+            private List<Map<String, Object>> reportDataList = null;
+            public String getSubArea(Long templateId) {
+                String sql = "SELECT report_group FROM report_template WHERE id = ?";
+                return jdbcTemplate.queryForObject(sql, new Object[]{templateId}, String.class);
+            }
+
+            private String convertMillisToDate(Long millis) {
+                if (millis == null) {
+                    return "N/A"; // Return a default value for null timestamps
+                }
+                SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy HH:mm:ss");
+                return sdf.format(new Date(millis));
+            }
+
+            public String getReportName(Long templateId) {
+                String sql = "SELECT name FROM report_template WHERE id = ?";
+                return jdbcTemplate.queryForObject(sql, new Object[]{templateId}, String.class);
+            }
+
+
+            public void generatePdf(Long templateId, String fromDateTime, String toDate, String username,  String assignedTo, String assigned_approver) throws Exception {
+                reportDataList = reportDataService.generateReportData(templateId, fromDateTime, toDate);
+
+                // Convert the date range to 'dd-MM-yyyy HH:mm:ss' format
+                SimpleDateFormat dateTimeFormatter = new SimpleDateFormat("dd-MM-yyyy HH:mm:ss");
+                String formattedFromDateTime = dateTimeFormatter.format(new Date(Long.parseLong(fromDateTime)));
+                String formattedToDateTime = dateTimeFormatter.format(new Date(Long.parseLong(toDate)));
+
+                Map<String, Map<String, Integer>> statistics = reportDataService.calculateStatistics(templateId, fromDateTime, toDate);
+                Document document = new Document(PageSize.A4.rotate());
+
+                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                PdfWriter writer = PdfWriter.getInstance(document, byteArrayOutputStream);
+
+                // Use TablePageEvent if required for header/footer
+                TablePageEvent event = new TablePageEvent(formattedFromDateTime, formattedToDateTime, username, templateId, this);
+                writer.setPageEvent(event);
+
+                document.open();
+
+                Map<String, Object> stringObjectMap = reportDataList.get(0);
+                PdfPTable table = new PdfPTable(stringObjectMap.size());
+                table.setWidthPercentage(100f);
+                table.setSpacingBefore(5);
+
+                PdfPCell cell = new PdfPCell();
+                addTableHeader(templateId, stringObjectMap, table);
+
+
+                System.out.println("Fetching ReportTemplate for templateId: " + templateId);
+                // Extract "From" and "To" values for each parameter
+                Map<String, String> formattedParameterRanges = extractFormattedParameterRanges(templateId);
+
+                Map<String, double[]> parameterRanges = extractParameterRanges(templateId);
+
+        /*    for (Map<String, Object> map : reportDataList) {
+                for (Map.Entry<String, Object> entry : map.entrySet()) {
+                    String valueStr = String.valueOf(entry.getValue());
+                    if (valueStr == null || valueStr.trim().isEmpty() || valueStr.equals("null")) {
+                        valueStr = "";
+                    }
+
+                    PdfPCell valueCell = new PdfPCell(new Phrase(valueStr));
+                    valueCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+
+                    if (!valueStr.isEmpty()) {
+                        double value = Double.parseDouble(valueStr);
+                        String paramName = entry.getKey();
+                        double[] range = parameterRanges.get(paramName);
+                        if (range != null) {
+                            double fromValue = range[0];
+                            double toValue = range[1];
+                            if (value > toValue) {
+                                valueCell.setBackgroundColor(CMYKColor.RED);
+                            } else if (value < fromValue) {
+                                valueCell.setBackgroundColor(CMYKColor.BLUE);
+                            }
+                        }
+                    }
+
+                    table.addCell(valueCell);
+                }
+            }*/
+                for (Map<String, Object> map : reportDataList) {
+                    for (Map.Entry<String, Object> entry : map.entrySet()) {
+                        String key = entry.getKey();
+                        String valueStr = String.valueOf(entry.getValue());
+
+                        if (key.equalsIgnoreCase("timestamp")) {
+                            valueStr = convertMillisToDate(Long.parseLong(valueStr));
+                        }
+
+                        PdfPCell valueCell = new PdfPCell(new Phrase(valueStr));
+                        valueCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+
+                        if (!valueStr.isEmpty()) {
+                            try {
+                                double value = Double.parseDouble(valueStr);
+                                double[] range = parameterRanges.get(key);
+                                if (range != null) {
+                                    double fromValue = range[0];
+                                    double toValue = range[1];
+                                    if (value > toValue) {
+                                        valueCell.setBackgroundColor(CMYKColor.RED);
+                                    } else if (value < fromValue) {
+                                        valueCell.setBackgroundColor(CMYKColor.BLUE);
+                                    }
+                                }
+                            } catch (NumberFormatException e) {
+                                // Ignore if not a number
+                            }
+                        }
+
+                        table.addCell(valueCell);
+                    }
+                }
+
+                addStatisticsRow("Max", statistics, table);
+                addStatisticsRow("Min", statistics, table);
+                addStatisticsRow("Avg", statistics, table);
+
+                document.add(table);
+                document.close();
+
+                // Create the PDF file name in the same format as before
+                String templateName = templateService.getById(templateId).getName().replaceAll("[^a-zA-Z0-9]", "_"); // Replace non-alphanumeric characters with underscores
+                String pdfFileName = templateName + "_" + formattedFromDateTime + "_TO_" + formattedToDateTime + ".pdf";
+                Date currentDate = new Date(Calendar.getInstance().getTimeInMillis());
+                long currentTimeMillis = currentDate.getTime();
+                String currentDateStr = Long.toString(currentTimeMillis);
+
+                //int chk = (assigned_approver == null) ? 0 : 1;
+                int chk = (assigned_approver == null || assigned_approver.trim().isEmpty()) ? 0 : 1;
+                // Insert the PDF into the database using JdbcTemplate
+                String sql = "INSERT INTO stored_reports (name, from_date, to_date, pdf_data, generated_by, generated_date, assigned_review, assigned_approver, is_approver_required) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                jdbcTemplate.update(connection -> {
+                    PreparedStatement ps = connection.prepareStatement(sql);
+                    ps.setString(1, pdfFileName);  // Set the formatted file name
+                    ps.setString(2, fromDateTime);
+                    ps.setString(3, toDate);
+                    ps.setBytes(4, byteArrayOutputStream.toByteArray());
+                    ps.setString(5, username);
+                    ps.setString(6, currentDateStr);
+                    ps.setString(7, assignedTo);
+                    ps.setString(8, assigned_approver);
+                    log.info("APPROVER IS {}", assigned_approver);
+                    log.info("chk is {} " ,chk);
+                    ps.setBoolean(9, chk==1);
+
+
+                    return ps;
+                });
+            }
+
+
+            private String extractBaseParameter(String columnName) {
+                if (columnName.contains("_From_")) {
+                    return columnName.substring(0, columnName.indexOf("_From_"));
+                }
+                return columnName;
+            }
+            private String extractUnit(String columnName) {
+                if (columnName.contains("_Unit_")) {
+                    int unitIndex = columnName.lastIndexOf("_Unit_") + 6;
+                    return columnName.substring(unitIndex); // Extract unit part
+                }
+                return ""; // Default empty unit if none found
+            }
+
+
+            private Map<String, String> extractFormattedParameterRanges(Long templateId) {
+                ReportTemplate template = templateService.getById(templateId);
+
+        // Ensure template is not null
+                if (template == null) {
+                    throw new RuntimeException("ReportTemplate not found for templateId: " + templateId);
+                }
+
+        // Ensure parameters are not null or empty
+                List<String> parameters = template.getParameters();
+                if (parameters == null || parameters.isEmpty()) {
+                    throw new RuntimeException("No parameters found for templateId: " + templateId);
+                }
+
+                System.out.println("Parameters: " + parameters);
+
+                Map<String, String> formattedParameterRanges = new HashMap<>();
+
+                for (String parameter : template.getParameters()) {
+                    String baseName = extractBaseParameter(parameter);
+                    String unit = extractUnit(parameter);
+                    double fromValue = getFromValue(parameter);
+                    double toValue = getToValue(parameter);
+
+                    // Construct the formatted string: "BaseName(Unit) Range: fromValue_To_toValue"
+                    String formattedValue = String.format("%s(%s)\n Range: %.0f To %.0f",
+                            baseName, unit, fromValue, toValue);
+
+                    formattedParameterRanges.put(parameter, formattedValue);
+                }
+
+                // Debugging output
+                for (Map.Entry<String, String> entry : formattedParameterRanges.entrySet()) {
+                    System.out.println("Formatted Parameter: " + entry.getValue());
+                }
+
+                return formattedParameterRanges;
+            }
+
+            private String removeSuffix(String columnName) {
+                if (columnName.contains("_From_")) {
+                    return columnName.substring(0, columnName.indexOf("_From_"));
+                }
+                return columnName;
+            }
+
+            private double getFromValue(String paramName) {
+                if (paramName.contains("_From_") && paramName.contains("_To_")) {
+                    try {
+                        String[] parts = paramName.split("_From_");
+                        String fromPart = parts[1].split("_To_")[0];  // Extract numeric part
+                        return Double.parseDouble(fromPart);
+                    } catch (Exception e) {
+                        log.error("Error parsing 'From' value from parameter: " + paramName, e);
+                    }
+                }
+                return Double.NEGATIVE_INFINITY;  // Default if parsing fails
+            }
+
+            private double getToValue(String paramName) {
+                if (paramName.contains("_To_")) {
+                    try {
+                        String[] parts = paramName.split("_To_");
+                        String toPart = parts[1].split("_Unit_")[0]; // Extract numeric part
+                        return Double.parseDouble(toPart);
+                    } catch (Exception e) {
+                        log.error("Error parsing 'To' value from parameter: " + paramName, e);
+                    }
+                }
+                return Double.POSITIVE_INFINITY;  // Default if parsing fails
+            }
+
+
+            //------------------Vishal (Code Added)
+
+            private void addStatisticsRow(String label, Map<String, Map<String, Integer>> statistics, PdfPTable table) {
+                PdfPCell labelCell = new PdfPCell(new Phrase(label));
+                labelCell.setBackgroundColor(CMYKColor.YELLOW); // Set the background color to yellow
+                table.addCell(labelCell);
+
+                for (String parameter : statistics.keySet()) {
+                    String value = String.valueOf(statistics.get(parameter).get(label.toLowerCase()));
+                    PdfPCell valueCell = new PdfPCell(new Phrase(value != null ? value : ""));
+                    valueCell.setBackgroundColor(CMYKColor.YELLOW); // Set the background color to yellow
+                    table.addCell(valueCell);
+                }
+            }
+
+            private void addTableHeader(Long templateId, Map<String, Object> stringObjectMap, PdfPTable table) {
+                Font font = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, CMYKColor.BLACK);
+                PdfPCell cell = new PdfPCell();
+                cell.setBackgroundColor(CMYKColor.GRAY);
+                cell.setPadding(5);
+                cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+
+                // Fetch the template details using templateId
+                ReportTemplate template = templateService.getById(templateId);
+                Map<String, String> formattedParameters = extractFormattedParameterRanges(templateId);
+
+                // Ensure Timestamp is always the first column
+                cell.setPhrase(new Phrase("Timestamp", font));
+                table.addCell(cell);
+
+                // Generate headers for parameters
+                for (String parameter : template.getParameters()) {
+                    String formattedParam = formattedParameters.get(parameter);
+                    cell.setPhrase(new Phrase(formattedParam != null ? formattedParam : parameter, font));
+                    table.addCell(cell);
+                }
+
+                // Make sure headers repeat on every page
+                table.setHeaderRows(1);
+            }
+
+            private class TablePageEvent extends PdfPageEventHelper {
+
+                private final String fromDateTime;
+                private final String toDateTime;
+                private final String username;
+                private final Long templateId;
+                private final PdfService pdfService;
+                private String reviewedBy = "";
+                private String reviewDate = "";
+
+
+                public TablePageEvent(String fromDateTime, String toDateTime, String username, Long templateId, PdfService pdfService) {
+                    this.fromDateTime = fromDateTime;
+                    this.toDateTime = toDateTime;
+                    this.username = username;
+                    this.templateId = templateId;
+                    this.pdfService = pdfService;
+                    try {
+                        ReportDTO latestReport = pdfService.findLatestGeneratedReport(templateId, fromDateTime, toDateTime, username);
+                        if (latestReport != null) {
+                            this.reviewedBy = latestReport.getReviewedBy();
+                            if (latestReport.getReviewDate() != null) {
+                                long millis = Long.parseLong(latestReport.getReviewDate());
+                                this.reviewDate = new SimpleDateFormat("dd-MM-yyyy HH:mm:ss").format(new Date(millis));
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.warn("Failed to fetch review info for footer", e);
+                    }
+                }
+
+
+                @Override
+                public void onStartPage(PdfWriter writer, Document document) {
+                    try {
+                        Font fontTitle = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 13);
+                        Font fontContent = FontFactory.getFont(FontFactory.HELVETICA, 11);
+
+                        PdfPTable headerTable = new PdfPTable(3);
+                        headerTable.setWidthPercentage(100);
+                        float[] columnWidths = {20f, 60f, 20f};
+                        headerTable.setWidths(columnWidths);
+
+                        // Fetch dynamic values
+                        String subArea = pdfService.getSubArea(templateId);
+
+                        // Extract parameter ranges dynamically
+                        Map<String, String> formattedParameterRanges = extractFormattedParameterRanges(templateId);
+
+                        // Format the extracted parameter ranges as a string
+        //                StringBuilder rangeText = new StringBuilder("\nRanges:");
+        //                for (Map.Entry<String, double[]> entry : parameterRanges.entrySet()) {
+        //                    rangeText.append("[").append((int) entry.getValue()[0]).append(" - ").append((int) entry.getValue()[1]).append("]\n");
+        //
+        //                }
+
+
+                        // Logo Cell - Left Aligned
+                        PdfPCell cell1 = new PdfPCell();
+                        try {
+                            Image image = Image.getInstance(new ClassPathResource("static/images/logo.png").getURL());
+                            image.scaleToFit(100, 70);
+                            image.setAlignment(Element.ALIGN_LEFT);
+                            cell1.addElement(image);
+                        } catch (IOException e) {
+                            throw new RuntimeException("Error loading logo image", e);
+                        }
+                        cell1.setBorder(Rectangle.NO_BORDER);
+                        cell1.setPaddingLeft(5);
+                        cell1.setVerticalAlignment(Element.ALIGN_MIDDLE);
+
+                        // Address Cell - Center Aligned
+                        PdfPCell cell2 = new PdfPCell(new Paragraph(address, fontTitle));
+                        cell2.setBorder(Rectangle.NO_BORDER);
+                        cell2.setHorizontalAlignment(Element.ALIGN_CENTER);
+                        cell2.setVerticalAlignment(Element.ALIGN_MIDDLE);
+                        cell2.setPadding(5);
+
+                        PdfPCell cell3 = new PdfPCell(new Paragraph(""));
+                        cell3.setBorder(Rectangle.NO_BORDER);
+
+                        // Report Heading - Centered Below Address
+                        PdfPCell cell4 = new PdfPCell(new Paragraph( reportHeading, fontTitle));  // Display Report Name
+                        cell4.setBorder(Rectangle.NO_BORDER);
+                        cell4.setHorizontalAlignment(Element.ALIGN_CENTER);
+                        cell4.setVerticalAlignment(Element.ALIGN_MIDDLE);
+                        cell4.setColspan(3);
+                        cell4.setPaddingTop(5);
+                        cell4.setPaddingBottom(10);
+
+                        // Left Section - Start Date, Start Time, Area, Sub Area (Dynamic)
+                        PdfPCell cell5 = new PdfPCell();
+                        Paragraph paragraph5 = new Paragraph("Start Date: " + fromDateTime.split(" ")[0] +
+                                " \nStart Time: " + fromDateTime.split(" ")[1] +
+                                " \nArea: S20A" +
+                                " \nSub Area: " + subArea, fontContent);
+                        paragraph5.setLeading(12f, 0f);
+                        cell5.addElement(paragraph5);
+                        cell5.setBorder(Rectangle.NO_BORDER);
+                        cell5.setHorizontalAlignment(Element.ALIGN_LEFT);
+                        cell5.setPaddingLeft(5);
+                        cell5.setNoWrap(true);
+
+                        PdfPCell emptyCell = new PdfPCell(new Paragraph(""));
+                        emptyCell.setBorder(Rectangle.NO_BORDER);
+
+                        // Right Section - End Date, End Time, and Dynamic Parameter Ranges
+                        PdfPCell cell6 = new PdfPCell(new Paragraph(
+                                "End Date: " + toDateTime.split(" ")[0] +
+                                        "\nEnd Time: " + toDateTime.split(" ")[1]
+
+                        ));
+                        cell6.setBorder(Rectangle.NO_BORDER);
+                        cell6.setHorizontalAlignment(Element.ALIGN_RIGHT);
+                        cell6.setPaddingRight(5);
+
+                        // Add cells to table
+                        headerTable.addCell(cell1);
+                        headerTable.addCell(cell2);
+                        headerTable.addCell(cell3);
+                        headerTable.addCell(cell4);
+                        headerTable.addCell(cell5);
+                        headerTable.addCell(emptyCell);
+                        headerTable.addCell(cell6);
+
+                        document.add(headerTable);
+
+                    } catch (DocumentException e) {
+                        throw new RuntimeException("Error creating header", e);
+                    }
+                }
+
+
+                @Override
+                public void onEndPage(PdfWriter writer, Document document) {
+                    PdfPTable footerTable = new PdfPTable(2);
+                    footerTable.setWidthPercentage(100);
+
+                    try {
+                        footerTable.setWidths(new float[]{50f, 50f});
+                    } catch (DocumentException e) {
+                        throw new RuntimeException(e);
+                    }
+
+                    Font fontTitle = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10);
+                    LocalDateTime currentDate = LocalDateTime.now();
+                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("d-MMMM-yyyy HH:mm:ss");
+
+                    String formattedDate = currentDate.format(formatter);
+
+                    PdfPCell cell1 = new PdfPCell(new Phrase("Generated By: Operator " + username + "\nDate: " + formattedDate, fontTitle));
+                    cell1.setBorder(Rectangle.NO_BORDER);
+                    cell1.setHorizontalAlignment(Element.ALIGN_LEFT);
+                    cell1.setPaddingLeft(10);
+
+                    String reviewInfo = "";
+                    if (reviewedBy != null && !reviewedBy.isEmpty()) {
+                        reviewInfo = "Reviewed By: " + reviewedBy + "\nReview Date: " + reviewDate;
+                    }
+                    PdfPCell cell2 = new PdfPCell(new Phrase(reviewInfo, fontTitle));
+                    cell2.setBorder(Rectangle.NO_BORDER);
+                    cell2.setHorizontalAlignment(Element.ALIGN_RIGHT);
+
+                    footerTable.addCell(cell1);
+                    footerTable.addCell(cell2);
+
+                    PdfPTable pageNumberTable = new PdfPTable(1);
+                    pageNumberTable.setWidthPercentage(100);
+
+                    String pageNumber = "Page " + writer.getPageNumber();
+                    PdfPCell pageNumberCell = new PdfPCell(new Phrase(pageNumber, fontTitle));
+                    pageNumberCell.setBorder(Rectangle.NO_BORDER);
+                    pageNumberCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+
+                    pageNumberTable.addCell(pageNumberCell);
+
+                    try {
+                        footerTable.setTotalWidth(document.right() - document.left());
+                        pageNumberTable.setTotalWidth(document.right() - document.left());
+
+                        float footerYPosition = document.bottomMargin();
+                        float pageNumberYPosition = document.bottom() - 10;
+
+                        footerTable.writeSelectedRows(0, -1, document.leftMargin(), footerYPosition, writer.getDirectContent());
+                        pageNumberTable.writeSelectedRows(0, -1, document.leftMargin(), pageNumberYPosition, writer.getDirectContent());
+                    } catch (DocumentException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+
+            public List<ReportDTO> getAllReports() {
+                String sql = "SELECT id, name, from_date, to_date, generated_by, generated_date, is_approved, approved_by, approved_date, assigned_review, reviewed_by, review_date, is_approver_required, assigned_approver FROM stored_reports ORDER BY generated_date DESC";
+                return jdbcTemplate.query(sql, (rs, rowNum) -> new ReportDTO(
+                        rs.getLong("id"),
+                        rs.getString("name"),
+                        rs.getString("from_date"),
+                        rs.getString("to_date"),
+                        null, // pdfData will be set in getReportById
+                        rs.getString("generated_by"),
+                        rs.getString("generated_date"),
+                        rs.getBoolean("is_approved"),
+                        rs.getString("approved_by"),
+                        rs.getString("approved_date"),
+                        rs.getString("assigned_review"),  // Retrieve assignedReview
+                        rs.getString("reviewed_by"),      // Retrieve reviewedBy
+                        rs.getString("review_date") ,      // Retrieve reviewDate
+                        rs.getBoolean("is_approver_required"),
+                        rs.getString("assigned_approver")
+                ));
+            }
+
+
+            public ReportDTO getReportById(Long reportId) {
+                String sql = "SELECT name, from_date, to_date, pdf_data, generated_by, generated_date, is_approved, approved_by, approved_date, assigned_review, reviewed_by, review_date, is_approver_required, assigned_approver FROM stored_reports WHERE id = ?";
+                return jdbcTemplate.queryForObject(sql, new Object[]{reportId}, (rs, rowNum) -> new ReportDTO(
+                        reportId,
+                        rs.getString("name"),
+                        rs.getString("from_date"),
+                        rs.getString("to_date"),
+                        rs.getBytes("pdf_data"),
+                        rs.getString("generated_by"),
+                        rs.getString("generated_date"),
+                        rs.getBoolean("is_approved"),
+                        rs.getString("approved_by"),
+                        rs.getString("approved_date"),
+                        rs.getString("assigned_review"),  // Retrieve assignedReview
+                        rs.getString("reviewed_by"),      // Retrieve reviewedBy
+                        rs.getString("review_date"),      // Retrieve reviewDate
+                        rs.getBoolean("is_approver_required"),
+                        rs.getString("assigned_approver")
+                ));
+            }
+            public List<GroupDTO> getAllGroups() {
+                String sql = "SELECT id, name FROM group_names";
+                return jdbcTemplate.query(sql, (rs, rowNum) -> new GroupDTO(
+                        rs.getLong("id"),
+                        rs.getString("name")
+                ));
+            }
+
+            public void stampReviewInfo(Long reportId, String reviewer) throws Exception {
+                // Fetch the existing PDF from DB
+                ReportDTO reportDTO = getReportById(reportId);
+                if (reportDTO == null) {
+                    throw new Exception("Report not found");
+                }
+
+                // Read the PDF
+                PdfReader pdfReader = new PdfReader(new ByteArrayInputStream(reportDTO.getPdfData()));
+                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                PdfStamper pdfStamper = new PdfStamper(pdfReader, byteArrayOutputStream);
+
+                // Prepare review info
+                LocalDateTime now = LocalDateTime.now();
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("d-MMMM-yyyy HH:mm:ss");
+                String formattedDate = now.format(formatter);
+
+                Font font = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10);
+
+                // Create "Reviewed By" table
+                PdfPTable reviewTable = new PdfPTable(1);
+                reviewTable.setTotalWidth(180);
+                reviewTable.setWidthPercentage(100);
+
+                PdfPCell reviewCell = new PdfPCell(new Phrase("\nReviewed By:Supervisor: " + reviewer + "\nDate: " + formattedDate, font));
+                reviewCell.setBorder(Rectangle.NO_BORDER);
+                reviewCell.setPadding(10);
+                reviewCell.setHorizontalAlignment(Element.ALIGN_LEFT);
+                reviewTable.addCell(reviewCell);
+
+                // Stamp on every page
+                int totalPages = pdfReader.getNumberOfPages();
+                for (int i = 1; i <= totalPages; i++) {
+                    PdfContentByte canvas = pdfStamper.getOverContent(i);
+                    Rectangle pageSize = pdfReader.getPageSize(i);
+
+                    float x = pageSize.getRight() - 360;
+                    float y = pageSize.getBottom() + 50;
+                    reviewTable.writeSelectedRows(0, -1, x, y, canvas);
+                }
+
+                pdfStamper.close();
+                pdfReader.close();
+
+                // Save updated PDF and update DB
+                long reviewTimeMillis = System.currentTimeMillis();
+                String sql = "UPDATE stored_reports SET pdf_data = ?, reviewed_by = ?, review_date = ? WHERE id = ?";
+                jdbcTemplate.update(sql, byteArrayOutputStream.toByteArray(), reviewer, String.valueOf(reviewTimeMillis), reportId);
+            }
+
+            public void approveReport(Long reportId, String username) throws Exception {
+                // Fetch the existing PDF from the database
+                ReportDTO reportDTO = getReportById(reportId);
+                if (reportDTO == null) {
+                    throw new Exception("Report not found");
+                }
+
+                // Read the existing PDF
+                PdfReader pdfReader = new PdfReader(new ByteArrayInputStream(reportDTO.getPdfData()));
+                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                PdfStamper pdfStamper = new PdfStamper(pdfReader, byteArrayOutputStream);
+
+                // Define the approval table
+                PdfPTable approvalTable = new PdfPTable(1);
+                approvalTable.setTotalWidth(180); // Set fixed width
+                approvalTable.setWidthPercentage(100);
+
+                Font fontTitle = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10);
+
+                // Get the current date
+                LocalDateTime currentDateTime = LocalDateTime.now();
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("d-MMMM-yyyy HH:mm:ss");
+                String formattedDate = currentDateTime.format(formatter);
+
+                // Create Approval Cell with No Border
+                PdfPCell approvalCell = new PdfPCell(new Phrase("\nApproved By:Supervisor: " + username +"\nDate: " + formattedDate, fontTitle));
+                approvalCell.setBorder(Rectangle.NO_BORDER);
+                approvalCell.setPadding(10);
+                approvalCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+                approvalTable.addCell(approvalCell);
+
+                int totalPages = pdfReader.getNumberOfPages();
+
+                // Loop through all pages and stamp the approval table
+                for (int i = 1; i <= totalPages; i++) {
+                    PdfContentByte content = pdfStamper.getOverContent(i);
+                    Rectangle pageSize = pdfReader.getPageSize(i);
+                    float xPos = pageSize.getRight()-180;
+                    float yPos = pageSize.getBottom() + 50;
+                    approvalTable.writeSelectedRows(0, -1, xPos, yPos, content);
+                }
+
+                // Close the PDF
+                pdfStamper.close();
+                pdfReader.close();
+
+                // Update the database with the approved PDF
+                long approvedTimeMillis = System.currentTimeMillis();
+                String sql = "UPDATE stored_reports SET pdf_data = ?, is_approved = ?, approved_by = ?, approved_date = ? WHERE id = ?";
+                jdbcTemplate.update(sql, byteArrayOutputStream.toByteArray(), true, username, String.valueOf(approvedTimeMillis), reportId);
+            }
+
+//            public void reviewReport(Long reportId, String username) throws Exception {
+//                // Update the PDF and approval details in the database
+//                long reviewedTimeMillis = System.currentTimeMillis();
+//                String sql = "UPDATE stored_reports SET reviewed_by = ?, review_date = ? WHERE id = ?";
+//                jdbcTemplate.update(sql, username, String.valueOf(reviewedTimeMillis), reportId);
+//            }
+public void reviewReport(Long reportId, String username) throws Exception {
+    stampReviewInfo(reportId, username);
+}
+
+            private Map<String, double[]> extractParameterRanges(Long templateId) {
+                ReportTemplate template = templateService.getById(templateId);
+                Map<String, double[]> parameterRanges = new HashMap<>();
+
+                for (String parameter : template.getParameters()) {
+                    String cleanParameter = extractBaseParameter(parameter); // same as you're already using
+                    double fromValue = getFromValue(parameter);
+                    double toValue = getToValue(parameter);
+                    parameterRanges.put(cleanParameter, new double[]{fromValue, toValue});
+                }
+
+                return parameterRanges;
+            }
+            public ReportDTO findLatestGeneratedReport(Long templateId, String fromDateTime, String toDateTime, String generatedBy) {
+                String templateName = getReportName(templateId).replaceAll("[^a-zA-Z0-9]", "_");
+                String likeName = templateName + "%";
+
+                String sql = "SELECT id, name, from_date, to_date, pdf_data, generated_by, generated_date, is_approved, " +
+                        "approved_by, approved_date, assigned_review, reviewed_by, review_date, " +
+                        "is_approver_required, assigned_approver " +
+                        "FROM stored_reports WHERE name LIKE ? AND from_date = ? AND to_date = ? AND generated_by = ? " +
+                        "ORDER BY generated_date DESC LIMIT 1";
+
+                List<ReportDTO> reports = jdbcTemplate.query(sql,
+                        new Object[]{likeName, fromDateTime, toDateTime, generatedBy},
+                        (rs, rowNum) -> new ReportDTO(
+                                rs.getLong("id"),
+                                rs.getString("name"),
+                                rs.getString("from_date"),
+                                rs.getString("to_date"),
+                                rs.getBytes("pdf_data"),
+                                rs.getString("generated_by"),
+                                rs.getString("generated_date"),
+                                rs.getBoolean("is_approved"),
+                                rs.getString("approved_by"),
+                                rs.getString("approved_date"),
+                                rs.getString("assigned_review"),
+                                rs.getString("reviewed_by"),
+                                rs.getString("review_date"),
+                                rs.getBoolean("is_approver_required"),
+                                rs.getString("assigned_approver")
+                        )
+                );
+
+                return reports.isEmpty() ? null : reports.get(0);
+            }
+
+        }
