@@ -110,13 +110,24 @@ export class ListTemplateComponent implements OnInit {
 
   parseParameters(parameters: string[]): any[] {
     return parameters.map(param => {
-      const match = param.match(/(.*)_From_(\d+)_To_(\d+)/);
-      return match
-        ? { baseName: match[1], range: { min: +match[2], max: +match[3] } }
-        : { baseName: param, range: { min: null, max: null } };
+const rangeMatch = param.match(/(.*)_From_(\d+)_To_(\d+)_?(.*)?/);
+const unitMatch = param.match(/(.*)_Unit_(.*)/);
+
+if (rangeMatch) {
+  const baseName = rangeMatch[1];
+  const min = +rangeMatch[2];
+  const max = +rangeMatch[3];
+  const unit = rangeMatch[4] || '';
+  return { baseName, range: { min, max, unit } };
+} else if (unitMatch) {
+  const baseName = unitMatch[1];
+  const unit = unitMatch[2];
+  return { baseName, range: { min: null, max: null, unit } };
+} else {
+  return { baseName: param, range: { min: null, max: null, unit: '' } };
+}
     });
   }
-
   filterTemplates(): void {
     if (!this.searchQuery) {
       this.filteredData = this.data;
@@ -251,13 +262,16 @@ export class ListTemplateComponent implements OnInit {
   
   updateParameterRange(index: number): void {
     const param = this.selectedParameters[index];
+    const { min, max, unit } = param.range;
     const baseName = param.baseName;
-    const range = param.range;
-    const updatedParam = `${baseName}_From_${range.min}_To_${range.max}`;
-    this.selectedParameters[index] = { baseName, range };
+    const updatedParam = unit
+      ? `${baseName}_From_${min}_To_${max}_${unit}`
+      : `${baseName}_From_${min}_To_${max}`;
+  
+    this.selectedParameters[index] = { baseName, range: { min, max, unit } };
     this.selectedTemplate.parameters[index] = updatedParam;
   }
-
+  
 
   // saveEdit(): void {
   //   if (!this.selectedTemplate || !this.selectedTemplate.id) {
@@ -292,7 +306,7 @@ export class ListTemplateComponent implements OnInit {
   //           this.filterTemplates();
   //           this.isEditVisible = false;
 
-  //           // Log the edit with ID before clearing selections
+  //           // Log the edit with ID before clearing selections 
   //           this.http.post(`${this.apiBaseUrl}/log-edited-template`, {
   //             username: this.currentUsername,
   //             templateId: this.selectedTemplate.id // Ensure templateId is used here
@@ -325,12 +339,20 @@ export class ListTemplateComponent implements OnInit {
         name: this.selectedTemplate.name,
         report_group: this.selectedGroup,
         parameters: this.selectedParameters.map(p => {
-          if ((p.range.min === null && p.range.max === null) || p.range.unit === '') {
-            return p.baseName;
+          const { baseName, range } = p;
+          const { min, max, unit } = range;
+        
+          if (min !== null && max !== null && unit) {
+            return `${baseName}_From_${min}_To_${max}_${unit}`;
+          } else if (min !== null && max !== null) {
+            return `${baseName}_From_${min}_To_${max}`;
+          } else if (unit) {
+            return `${baseName}_Unit_${unit}`;
           } else {
-            return `${p.baseName}_From_${p.range.min}_To_${p.range.max}_${p.range.unit}`;
+            return baseName;
           }
         })
+        
         
         
         // additionalInfo: this.selectedAdditionalInfo.join(',')

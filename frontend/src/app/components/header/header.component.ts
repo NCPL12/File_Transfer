@@ -19,7 +19,7 @@ export class HeaderComponent implements OnInit, OnDestroy {
   role: string | null = null;
   showConfirmLogout = false;
   inactivityTimeout: any;
-  inactivityTimeLimit = 600000; 
+  inactivityTimeLimit = 1800000; 
   activityEvents: string[] = ['click', 'mousemove', 'keydown'];
   subscriptions: Subscription[] = [];
   isLoggingOut = false;  

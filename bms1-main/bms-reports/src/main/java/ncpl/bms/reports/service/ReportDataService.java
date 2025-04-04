@@ -152,7 +152,7 @@ public class ReportDataService {
             return new ArrayList<>();
         }
 
-        log.info("Table with maximum records: {}", tableWithMaxRecords);
+        System.out.println("Table with maximum records: {}"+ tableWithMaxRecords);
 
         final String finalTableWithMaxRecords = tableWithMaxRecords;
 
