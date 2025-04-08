@@ -76,6 +76,96 @@ public class PdfService {
         return jdbcTemplate.queryForObject(sql, new Object[]{templateId}, String.class);
     }
 
+    public String getDynamicReportHeading(Long templateId) {
+        String sql = "SELECT ph.HeaderName " +
+                "FROM report_template rt " +
+                "JOIN ParameterHeaders ph ON rt.parameters LIKE CONCAT('%', ph.SetPointName, '%') " +
+                "WHERE rt.id = ?";
+
+        try {
+            List<String> headers = jdbcTemplate.queryForList(sql, new Object[]{templateId}, String.class);
+
+            if (headers == null || headers.isEmpty()) {
+                return "Report"; // Fallback if nothing matched
+            }
+
+            // Join with 'and' if multiple
+            if (headers.size() == 1) {
+                return headers.get(0) + " Report";
+            } else {
+                String joined = String.join(", ", headers.subList(0, headers.size() - 1)) +
+                        " and " + headers.get(headers.size() - 1);
+                return joined + " Report";
+            }
+
+        } catch (Exception e) {
+            log.warn("Error generating dynamic report heading, using fallback.", e);
+            return "Report";
+        }
+    }
+    public Map<String, Map<String, Map<String, Object>>> calculateStatistics(Long templateId, String fromDate, String toDate) {
+        List<Map<String, Object>> data = reportDataService.generateReportData(templateId, fromDate, toDate);
+
+        Map<String, Map<String, Map<String, Object>>> result = new LinkedHashMap<>();
+
+        for (String key : data.get(0).keySet()) {
+            if (key.equalsIgnoreCase("timestamp")) continue;
+
+            double maxVal = Double.NEGATIVE_INFINITY;
+            double minVal = Double.POSITIVE_INFINITY;
+            long maxTime = 0L, minTime = 0L;
+            double total = 0;
+            int count = 0;
+
+            for (Map<String, Object> row : data) {
+                Object valObj = row.get(key);
+                Object timeObj = row.get("timestamp");
+
+                if (valObj == null || timeObj == null) continue;
+
+                try {
+                    double val = Double.parseDouble(valObj.toString());
+                    long time = Long.parseLong(timeObj.toString());
+
+                    if (val > maxVal) {
+                        maxVal = val;
+                        maxTime = time;
+                    }
+                    if (val < minVal) {
+                        minVal = val;
+                        minTime = time;
+                    }
+
+                    total += val;
+                    count++;
+                } catch (Exception e) {
+                    // skip bad data
+                }
+            }
+
+            Map<String, Map<String, Object>> statMap = new LinkedHashMap<>();
+            Map<String, Object> maxMap = new HashMap<>();
+            Map<String, Object> minMap = new HashMap<>();
+            Map<String, Object> avgMap = new HashMap<>();
+
+            if (count > 0) {
+                maxMap.put("value", (int) maxVal);
+                maxMap.put("timestamp", maxTime);
+
+                minMap.put("value", (int) minVal);
+                minMap.put("timestamp", minTime);
+
+                avgMap.put("value", (int) (total / count));
+            }
+
+            statMap.put("max", maxMap);
+            statMap.put("min", minMap);
+            statMap.put("avg", avgMap);
+            result.put(key, statMap);
+        }
+
+        return result;
+    }
 
     public void generatePdf(Long templateId, String fromDateTime, String toDate, String username,  String assignedTo, String assigned_approver) throws Exception {
         reportDataList = reportDataService.generateReportData(templateId, fromDateTime, toDate);
@@ -102,7 +192,7 @@ public class PdfService {
         int columnCount = stringObjectMap.size();
         int rowCount = 0;
         int rowsPerPage = 20;
-        Map<String, Map<String, Integer>> statistics = reportDataService.calculateStatistics(templateId, fromDateTime, toDate);
+        Map<String, Map<String, Map<String, Object>>> statistics = calculateStatistics(templateId, fromDateTime, toDate);
 
         PdfPTable table = new PdfPTable(stringObjectMap.size());
         table.setWidthPercentage(100f);
@@ -171,12 +261,38 @@ public class PdfService {
             }
         }
 
-        addStatisticsRow("Max", statistics, table);
-        addStatisticsRow("Min", statistics, table);
-        addStatisticsRow("Avg", statistics, table);
-
+        // ✅ Add the main data table
         document.add(table);
+
+// ✅ Create a new page for the statistics
+        document.newPage();
+
+// ✅ Create and fill the statistics table
+        PdfPTable statisticsTable = new PdfPTable(columnCount);
+        statisticsTable.setWidthPercentage(100f);
+        statisticsTable.setSpacingBefore(10);
+
+// Optional: Add statistics summary title
+//        Paragraph statsTitle = new Paragraph("Statistics Summary", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14));
+//        statsTitle.setAlignment(Element.ALIGN_CENTER);
+//        statsTitle.setSpacingAfter(10);
+//        document.add(statsTitle);
+
+// Add headers + stat rows
+        addTableHeader(templateId, stringObjectMap, statisticsTable);
+        addStatisticsRow("Max", statistics, statisticsTable);
+        addStatisticsRow("Min", statistics, statisticsTable);
+        addStatisticsRow("Avg", statistics, statisticsTable);
+
+// ✅ Add the final stats table to document
+        document.add(statisticsTable);
+
+// ✅ NOW close the document
         document.close();
+
+
+//        document.add(table);
+//        document.close();
 
         // Create the PDF file name in the same format as before
         String templateName = templateService.getById(templateId).getName().replaceAll("[^a-zA-Z0-9]", "_"); // Replace non-alphanumeric characters with underscores
@@ -226,40 +342,28 @@ public class PdfService {
 
     private Map<String, String> extractFormattedParameterRanges(Long templateId) {
         ReportTemplate template = templateService.getById(templateId);
+        if (template == null) throw new RuntimeException("ReportTemplate not found for templateId: " + templateId);
 
-        // Ensure template is not null
-        if (template == null) {
-            throw new RuntimeException("ReportTemplate not found for templateId: " + templateId);
-        }
-
-        // Ensure parameters are not null or empty
         List<String> parameters = template.getParameters();
-        if (parameters == null || parameters.isEmpty()) {
-            throw new RuntimeException("No parameters found for templateId: " + templateId);
-        }
-
-        System.out.println("Parameters: " + parameters);
+        if (parameters == null || parameters.isEmpty()) throw new RuntimeException("No parameters found for templateId: " + templateId);
 
         Map<String, String> formattedParameterRanges = new HashMap<>();
 
-        for (String parameter : template.getParameters()) {
-//            String baseName = extractBaseParameter(parameter);
+        for (String parameter : parameters) {
             String baseName = extractBaseParameter(parameter).replaceFirst("^SYNGENE_", "");
-
             String unit = extractUnit(parameter);
             double fromValue = getFromValue(parameter);
             double toValue = getToValue(parameter);
 
-            // Construct the formatted string: "BaseName(Unit) Range: fromValue_To_toValue"
-            String formattedValue = String.format("%s(%s)\n Range: %.0f To %.0f",
-                    baseName, unit, fromValue, toValue);
+            // Format header string
+            String formatted;
+            if (Double.isFinite(fromValue) && Double.isFinite(toValue)) {
+                formatted = String.format("%s(%s)\nRange: %.0f To %.0f", baseName, unit, fromValue, toValue);
+            } else {
+                formatted = String.format("%s(%s)", baseName, unit);
+            }
 
-            formattedParameterRanges.put(parameter, formattedValue);
-        }
-
-        // Debugging output
-        for (Map.Entry<String, String> entry : formattedParameterRanges.entrySet()) {
-            System.out.println("Formatted Parameter: " + entry.getValue());
+            formattedParameterRanges.put(parameter, formatted);
         }
 
         return formattedParameterRanges;
@@ -301,18 +405,60 @@ public class PdfService {
 
     //------------------Vishal (Code Added)
 
-    private void addStatisticsRow(String label, Map<String, Map<String, Integer>> statistics, PdfPTable table) {
-        PdfPCell labelCell = new PdfPCell(new Phrase(label));
+    private void addStatisticsRow(String label, Map<String, Map<String, Map<String, Object>>> statistics, PdfPTable table) {
+        Font fontBold = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10);
+        Font fontNormal = FontFactory.getFont(FontFactory.HELVETICA, 9);
+        List<String> parameterKeys = new ArrayList<>(statistics.keySet());
+
+        boolean hasTimestamp = !label.equalsIgnoreCase("Avg");
+
+        // Label cell
+        PdfPCell labelCell = new PdfPCell(new Phrase(label, fontBold));
         labelCell.setBackgroundColor(CMYKColor.YELLOW);
-        labelCell.setHorizontalAlignment(Element.ALIGN_CENTER); // Center align the label
+        labelCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+        labelCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        if (hasTimestamp) {
+            labelCell.setRowspan(2); // Only Max & Min
+        }
         table.addCell(labelCell);
 
-        for (String parameter : statistics.keySet()) {
-            String value = String.valueOf(statistics.get(parameter).get(label.toLowerCase()));
-            PdfPCell valueCell = new PdfPCell(new Phrase(value != null ? value : ""));
+        // Value Row
+        for (String parameter : parameterKeys) {
+            Map<String, Object> statData = statistics.get(parameter).get(label.toLowerCase());
+            String valueStr = "null";
+
+            if (statData != null && statData.get("value") != null) {
+                valueStr = statData.get("value").toString();
+            }
+
+            PdfPCell valueCell = new PdfPCell(new Phrase(valueStr, fontNormal));
             valueCell.setBackgroundColor(CMYKColor.YELLOW);
-            valueCell.setHorizontalAlignment(Element.ALIGN_CENTER); // Optional: also center values
+            valueCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+            valueCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
             table.addCell(valueCell);
+        }
+
+        // Timestamp Row (for Max & Min only)
+        if (hasTimestamp) {
+            for (String parameter : parameterKeys) {
+                Map<String, Object> statData = statistics.get(parameter).get(label.toLowerCase());
+                String dateStr = "";
+
+                if (statData != null && statData.get("timestamp") != null) {
+                    try {
+                        long millis = Long.parseLong(statData.get("timestamp").toString());
+                        dateStr = convertMillisToDate(millis);
+                    } catch (Exception ignored) {
+                        dateStr = "N/A";
+                    }
+                }
+
+                PdfPCell dateCell = new PdfPCell(new Phrase(dateStr, fontNormal));
+                dateCell.setBackgroundColor(CMYKColor.YELLOW);
+                dateCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+                dateCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+                table.addCell(dateCell);
+            }
         }
     }
 
@@ -424,7 +570,11 @@ public class PdfService {
                 cell3.setBorder(Rectangle.NO_BORDER);
 
                 // Report Heading - Centered Below Address
-                PdfPCell cell4 = new PdfPCell(new Paragraph( reportHeading, fontTitle));  // Display Report Name
+//                PdfPCell cell4 = new PdfPCell(new Paragraph( reportHeading, fontTitle));  // Display Report Name
+
+                String dynamicHeading = pdfService.getDynamicReportHeading(templateId);
+                PdfPCell cell4 = new PdfPCell(new Paragraph(dynamicHeading, fontTitle));
+
                 cell4.setBorder(Rectangle.NO_BORDER);
                 cell4.setHorizontalAlignment(Element.ALIGN_CENTER);
                 cell4.setVerticalAlignment(Element.ALIGN_MIDDLE);
