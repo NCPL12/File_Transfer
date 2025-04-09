@@ -223,32 +223,48 @@ public class ReportDataService {
 
 
 
+// ✅ FIX getReportData method to filter only valid columns before building SELECT query
+
     public List<Map<String, Object>> getReportData(Long templateId, String fromDate, String toDate) {
         ReportTemplate template = templateService.getById(templateId);
+        List<String> allParams = template.getParameters();
 
-        // Construct the columns part of the SQL query
-        StringBuilder parameters = new StringBuilder("timestamp");
-        for (String param : template.getParameters()) {
-            parameters.append(", ").append(removeSuffix(param));
+        // Step 1: Fetch valid column names from report_data table
+        List<String> validColumns = jdbcTemplate.queryForList(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'report_data'",
+                String.class
+        );
 
+        // Step 2: Sanitize parameters (remove suffixes) and filter only existing columns
+        List<String> safeColumns = allParams.stream()
+                .map(this::removeSuffix) // remove _From_, _To_, _Unit_
+                .distinct()
+                .filter(validColumns::contains) // only keep those that exist in report_data
+                .collect(Collectors.toList());
+
+        // Step 3: Prepare final SELECT clause
+        StringBuilder columns = new StringBuilder("timestamp");
+        for (String column : safeColumns) {
+            columns.append(", ").append(column);
         }
 
-        // Construct the SQL query using placeholders for the dates
-        String sqlSelect = "SELECT " + parameters + " FROM report_data WHERE timestamp BETWEEN ? AND ?";
-
-        // Query for the report data using parameterized SQL
-        List<Map<String, Object>> reportData = jdbcTemplate.queryForList(sqlSelect, fromDate, toDate);
-
-        return reportData;
+        String sqlSelect = "SELECT " + columns + " FROM report_data WHERE timestamp BETWEEN ? AND ?";
+        return jdbcTemplate.queryForList(sqlSelect, fromDate, toDate);
     }
 
+    // ✅ Enhanced removeSuffix to handle all suffixes
     private String removeSuffix(String columnName) {
-        // Adjust this method based on the actual suffix patterns
-        if (columnName.contains("_From")) {
-            int suffixIndex = columnName.indexOf("_From");
-            return columnName.substring(0, suffixIndex);
+        String base = columnName;
+        if (base.contains("_From_")) {
+            base = base.substring(0, base.indexOf("_From_"));
         }
-        return columnName;
+        if (base.contains("_To_")) {
+            base = base.substring(0, base.indexOf("_To_"));
+        }
+        if (base.contains("_Unit_")) {
+            base = base.substring(0, base.indexOf("_Unit_"));
+        }
+        return base;
     }
 
     //------------------Vishal (Code Added)

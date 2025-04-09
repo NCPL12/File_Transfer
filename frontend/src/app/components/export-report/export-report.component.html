@@ -50,20 +50,20 @@
               <div>
                 <input placeholder="From Date" class="textbox-n" type="text"
                        onfocus="(this.type='datetime-local')" onblur="(this.type='text')"
-                       [(ngModel)]="fromDate" id="fromDate" class="options-item" />
+                       [(ngModel)]="fromDate" id="fromDate" class="options-item"
+                       max="9999-12-31T23:59" />
               </div>
               <div style="margin-top: 20px;">
                 <input placeholder="To Date" class="textbox-n" type="text"
                        onfocus="(this.type='datetime-local')" onblur="(this.type='text')"
-                       [(ngModel)]="toDate" id="toDate" class="options-item" />
+                       [(ngModel)]="toDate" id="toDate" class="options-item"
+                       max="9999-12-31T23:59" />
               </div>
-          
               <div *ngIf="dateError" class="error-msg" style="font-size: 14px; color: red; display: flex; align-items: center; justify-content: center;">
                 {{ dateError }}
               </div>
-          
               <div class="or-vid">OR</div>
-          
+              
               <div class="dropdown-container">
                 <select [(ngModel)]="predefinedReport" (change)="onPredefinedReportChange()" class="options-item-dropdown">
                   <option value="" disabled selected>Select Predefined Report</option>
