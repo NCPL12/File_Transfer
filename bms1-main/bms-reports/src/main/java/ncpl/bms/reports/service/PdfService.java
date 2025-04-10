@@ -367,7 +367,6 @@
                 String formatted = unit.isEmpty() ? baseName : String.format("%s(%s)", baseName, unit);
                 formattedParameterRanges.put(parameter, formatted);
             }
-
             return formattedParameterRanges;
         }
 
