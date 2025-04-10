@@ -110,22 +110,21 @@ export class ListTemplateComponent implements OnInit {
 
   parseParameters(parameters: string[]): any[] {
     return parameters.map(param => {
-const rangeMatch = param.match(/(.*)_From_(\d+)_To_(\d+)_?(.*)?/);
-const unitMatch = param.match(/(.*)_Unit_(.*)/);
-
-if (rangeMatch) {
-  const baseName = rangeMatch[1];
-  const min = +rangeMatch[2];
-  const max = +rangeMatch[3];
-  const unit = rangeMatch[4] || '';
-  return { baseName, range: { min, max, unit } };
-} else if (unitMatch) {
-  const baseName = unitMatch[1];
-  const unit = unitMatch[2];
-  return { baseName, range: { min: null, max: null, unit } };
-} else {
-  return { baseName: param, range: { min: null, max: null, unit: '' } };
-}
+      const rangeMatch = param.match(/(.*)_From_(\d+)_To_(\d+)_?(.*)?/);
+      const unitMatch = param.match(/(.*)_Unit_(.*)/);
+      if (rangeMatch) {
+        const baseName = rangeMatch[1];
+        const min = +rangeMatch[2];
+        const max = +rangeMatch[3];
+        const unit = rangeMatch[4] || '';
+        return { baseName, range: { min, max, unit }, displayName: `${baseName} (${min}-${max}${unit ? ' ' + unit : ''})` };
+      } else if (unitMatch) {
+        const baseName = unitMatch[1];
+        const unit = unitMatch[2];
+        return { baseName, range: { min: null, max: null, unit }, displayName: `${baseName} (${unit})` };
+      } else {
+        return { baseName: param, range: { min: null, max: null, unit: '' }, displayName: param };
+      }
     });
   }
   filterTemplates(): void {
@@ -264,74 +263,46 @@ if (rangeMatch) {
     const param = this.selectedParameters[index];
     const { min, max, unit } = param.range;
     const baseName = param.baseName;
-    const updatedParam = unit
-      ? `${baseName}_From_${min}_To_${max}_${unit}`
-      : `${baseName}_From_${min}_To_${max}`;
+
+    let updatedParam;
+    if (min !== null && max !== null && unit) {
+  
+      updatedParam = `${baseName}_From_${min}_To_${max}_Unit_${unit}`;
+    } else if (min !== null && max !== null) {
+
+      updatedParam = `${baseName}_From_${min}_To_${max}`;
+    } else if (unit) {
+
+      updatedParam = `${baseName}_Unit_${unit}`;
+    } else {
+
+
+      updatedParam = baseName;
+    }
   
     this.selectedParameters[index] = { baseName, range: { min, max, unit } };
     this.selectedTemplate.parameters[index] = updatedParam;
   }
   
 
-  // saveEdit(): void {
-  //   if (!this.selectedTemplate || !this.selectedTemplate.id) {
-  //     console.error('Invalid template selected for editing');
-  //     alert('No template selected or invalid template data');
-  //     return;
-  //   }
-
-  //   const templateObj = {
-  //     name: this.selectedTemplate.name,
-  //     report_group: this.selectedGroup,
-  //     parameters: this.selectedParameters.map(p => {
-  //       if (p.range.min === null && p.range.max === null) {
-  //         return p.baseName;
-  //       } else {
-  //         return `${p.baseName}_From_${p.range.min}_To_${p.range.max}`;
-  //       }
-  //     }),
-  //     additionalInfo: this.selectedAdditionalInfo.join(',')
-  //   };
-
-  //   console.log('Template object for update:', templateObj);
-
-  //   this.http.put(`${this.apiBaseUrl}/editTemplate/${this.selectedTemplate.id}`, templateObj, { responseType: 'json' })
-  //     .subscribe(
-  //       (response: any) => {
-  //         console.log('Response after edit:', response);
-
-  //         const index = this.filteredData.findIndex(item => item.id === this.selectedTemplate.id);
-  //         if (index > -1) {
-  //           this.filteredData[index] = { ...response };
-  //           this.filterTemplates();
-  //           this.isEditVisible = false;
-
-  //           // Log the edit with ID before clearing selections 
-  //           this.http.post(`${this.apiBaseUrl}/log-edited-template`, {
-  //             username: this.currentUsername,
-  //             templateId: this.selectedTemplate.id // Ensure templateId is used here
-  //           }).subscribe(
-  //             () => {
-  //               console.log('Edit logged successfully');
-  //             },
-  //             (error) => {
-  //               console.error('Error logging template editing', error);
-  //             }
-  //           );
-
-  //           this.clearSelections();
-  //         }
-  //       },
-  //       (error) => {
-  //         console.error('Error updating template:', error);
-  //       }
-  //     );
-  // }
+  validateRange(param: any): boolean {
+    if (param.range.min !== null && param.range.max !== null) {
+      return param.range.min < param.range.max;
+    }
+    return true;
+  }
 
   saveEdit(): void {
     if (!this.selectedTemplate || !this.selectedTemplate.id) {
         console.error('Invalid template selected for editing');
         alert('No template selected or invalid template data');
+        return;
+    }
+
+    // Add range validation before saving
+    const invalidRanges = this.selectedParameters.filter(param => !this.validateRange(param));
+    if (invalidRanges.length > 0) {
+        alert('Start range must be less than end range for all parameters');
         return;
     }
 
@@ -343,7 +314,7 @@ if (rangeMatch) {
           const { min, max, unit } = range;
         
           if (min !== null && max !== null && unit) {
-            return `${baseName}_From_${min}_To_${max}_${unit}`;
+            return `${baseName}_From_${min}_To_${max}_Unit_${unit}`;
           } else if (min !== null && max !== null) {
             return `${baseName}_From_${min}_To_${max}`;
           } else if (unit) {

@@ -46,7 +46,7 @@
     </table>
   </div>
   <button class="action-btn btn" (click)="editSelected()">Edit</button>
-  <button class="action-btn btn" (click)="deleteSelected()">Delete</button>
+  <!-- <button class="action-btn btn" (click)="deleteSelected()">Delete</button>   -->
 
   <div *ngIf="isEditVisible" class="edit-template-box">
     <h3>Edit Template</h3>
@@ -86,7 +86,6 @@
           </div>
         </div>
       </div>
-
       <div style="display: flex; margin-top: 100px;">
         <!-- Selected Parameters -->
         <div style="display: flex; flex-direction: column;">
@@ -101,11 +100,23 @@
                 <span>{{ param.baseName }}</span>
                 <div class="range-inputs">
                   <span>Select Range: </span>
-                  <input type="number" [(ngModel)]="param.range.min" min="-200" max="500" placeholder="From"
-                    [ngModelOptions]="{standalone: true}">
-                  <input type="number" [(ngModel)]="param.range.max" min="-200" max="500" placeholder="To"
-                    [ngModelOptions]="{standalone: true}">
-      
+                  <input type="number" 
+                         [(ngModel)]="param.range.min" 
+                         min="-200" 
+                         max="500" 
+                         placeholder="From"
+                         [ngModelOptions]="{standalone: true}"
+                         [style.border-color]="!validateRange(param) ? 'red' : ''">
+                  <input type="number" 
+                         [(ngModel)]="param.range.max" 
+                         min="-200" 
+                         max="500" 
+                         placeholder="To"
+                         [ngModelOptions]="{standalone: true}"
+                         [style.border-color]="!validateRange(param) ? 'red' : ''">
+                  <div *ngIf="!validateRange(param)" style="color: red; font-size: 12px;">
+                    Start range must be less than end range
+                  </div>
                   <div>
                     <label>Units:</label>
                     <input type="text" [(ngModel)]="param.range.unit" placeholder="e.g. kWh"
