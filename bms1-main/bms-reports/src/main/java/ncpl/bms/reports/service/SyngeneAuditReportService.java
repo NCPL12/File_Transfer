@@ -49,7 +49,7 @@ public class SyngeneAuditReportService {
         try {
             SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
             Date date = inputFormat.parse(rawTimestamp);
-            SimpleDateFormat outputFormat = new SimpleDateFormat("dd-MM-yyyy HH:mm:ss");
+            SimpleDateFormat outputFormat = new SimpleDateFormat("dd-MMM-yyyy HH:mm:ss");
             return outputFormat.format(date);
         } catch (Exception e) {
             log.warn("Invalid timestamp format: " + rawTimestamp, e);
@@ -77,7 +77,7 @@ public class SyngeneAuditReportService {
                     try {
                         PdfContentByte cb = writer.getDirectContent();
                         Font footerFont = new Font(Font.HELVETICA, 9);
-                        String generatedOn = "Generated on: " + new SimpleDateFormat("dd-MM-yyyy HH:mm:ss").format(new Date());
+                        String generatedOn = "Generated on: " + new SimpleDateFormat("dd-MMM-yyyy HH:mm:ss").format(new Date());
                         String pageNumber = "Page " + writer.getPageNumber();
 
                         ColumnText.showTextAligned(cb, Element.ALIGN_LEFT, new Phrase(generatedOn, footerFont), document.leftMargin(), 30, 0);
@@ -107,10 +107,11 @@ public class SyngeneAuditReportService {
                 log.error("Error loading logo image", e);
             }
             headerTable.addCell(logoCell);
+
             Font titleFont = new Font(Font.HELVETICA, 16, Font.BOLD);
-            Paragraph titlePara = new Paragraph("Audit Trail Report", titleFont);
+            Paragraph titlePara = new Paragraph("S20 Building Audit Trail Report", titleFont);
             titlePara.setAlignment(Element.ALIGN_CENTER);
-            titlePara.setIndentationLeft(-80f); // Shift slightly left (tweak the value as needed)
+            titlePara.setIndentationLeft(-80f); // Slight left shift
 
             PdfPCell titleCell = new PdfPCell();
             titleCell.setBorder(Rectangle.NO_BORDER);
@@ -123,7 +124,7 @@ public class SyngeneAuditReportService {
 
             // Date Formatting
             SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-            SimpleDateFormat outputFormat = new SimpleDateFormat("dd-MM-yyyy HH:mm");
+            SimpleDateFormat outputFormat = new SimpleDateFormat("dd-MMM-yyyy HH:mm");
 
             String formattedStartDate = startDate;
             String formattedEndDate = endDate;
@@ -137,6 +138,7 @@ public class SyngeneAuditReportService {
                 log.warn("Unable to format start/end dates", e);
             }
 
+            // Split date and time and align properly
             Font dateFont = new Font(Font.HELVETICA, 11);
             PdfPTable dateTable = new PdfPTable(2);
             dateTable.setWidthPercentage(100);
@@ -144,19 +146,34 @@ public class SyngeneAuditReportService {
             dateTable.setSpacingBefore(4f);
             dateTable.setSpacingAfter(4f);
 
-            PdfPCell leftCell = new PdfPCell(new Phrase("Start Date: " + formattedStartDate, dateFont));
-            leftCell.setBorder(Rectangle.NO_BORDER);
-            leftCell.setHorizontalAlignment(Element.ALIGN_LEFT);
+            // Start Date (Left Aligned)
+            Paragraph startDatePara = new Paragraph("Start Date: " + formattedStartDate.split(" ")[0], dateFont);
+            startDatePara.setAlignment(Element.ALIGN_LEFT);
+            Paragraph startTimePara = new Paragraph("Start Time: " + formattedStartDate.split(" ")[1], dateFont);
+            startTimePara.setAlignment(Element.ALIGN_LEFT);
 
-            PdfPCell rightCell = new PdfPCell(new Phrase("End Date: " + formattedEndDate, dateFont));
+            PdfPCell leftCell = new PdfPCell();
+            leftCell.setBorder(Rectangle.NO_BORDER);
+            leftCell.addElement(startDatePara);
+            leftCell.addElement(startTimePara);
+
+            // End Date (Right Aligned)
+            Paragraph endDatePara = new Paragraph("End Date: " + formattedEndDate.split(" ")[0], dateFont);
+            endDatePara.setAlignment(Element.ALIGN_RIGHT);
+            Paragraph endTimePara = new Paragraph("End Time: " + formattedEndDate.split(" ")[1], dateFont);
+            endTimePara.setAlignment(Element.ALIGN_RIGHT);
+
+            PdfPCell rightCell = new PdfPCell();
             rightCell.setBorder(Rectangle.NO_BORDER);
-            rightCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+            rightCell.addElement(endDatePara);
+            rightCell.addElement(endTimePara);
 
             dateTable.addCell(leftCell);
             dateTable.addCell(rightCell);
 
             document.add(dateTable);
 
+            // Data Table
             PdfPTable table = new PdfPTable(7);
             table.setWidthPercentage(100);
             table.setWidths(new float[]{3f, 2f, 4f, 2f, 2f, 2f, 2f});
