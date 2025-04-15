@@ -24,6 +24,11 @@
              [ngClass]="{'active-route': isActiveRoute('audit-report')}">
             <img src="../../../assets/images/log.png" class="nav-item-img" title="Audit Report">
         </div>
+     <!-- Sidebar button -->
+<div class="nav-item" (click)="navigateTo('syngene-audit-report')"
+[ngClass]="{'active-route': isActiveRoute('syngene-audit-report')}">
+<img src="../../../assets/images/log.png" class="nav-item-img" title="Syngene Audit Report">
+</div>
     </div>
     <div>
         <div class="nav-item-about" (click)="navigateTo('about')" 

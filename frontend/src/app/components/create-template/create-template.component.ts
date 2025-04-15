@@ -31,7 +31,7 @@ export class CreateTemplateComponent implements OnInit {
       unitError?: string
     }
   } = {};
-
+  
   searchTerm: string = '';
 
 
@@ -106,62 +106,63 @@ export class CreateTemplateComponent implements OnInit {
   onParameterChange(event: any): void {
     const value = event.target.value;
     if (event.target.checked) {
-      if (this.selectedParameters.length >= 12) {
-        alert("You can select a maximum of 12 parameters.");
-        event.target.checked = false;
-        return;
-      }
-      this.selectedParameters.push(value);
-      this.parameterRanges[value] = { min: 18, max: 25, addRange: false, unit: '' }; // Unit stored as text
+        if (this.selectedParameters.length >= 12) {
+            alert("You can select a maximum of 12 parameters.");
+            event.target.checked = false;
+            return;
+        }
+        this.selectedParameters.push(value);
+        this.parameterRanges[value] = { min: 18, max: 25, addRange: false, unit: '' }; // Unit stored as text
     } else {
-      const index = this.selectedParameters.indexOf(value);
-      if (index > -1) {
-        this.selectedParameters.splice(index, 1);
-        delete this.parameterRanges[value];
-      }
+        const index = this.selectedParameters.indexOf(value);
+        if (index > -1) {
+            this.selectedParameters.splice(index, 1);
+            delete this.parameterRanges[value];
+        }
+    }
+}
+
+
+
+updateParameterRange(param: string): void {
+  const range = this.parameterRanges[param];
+
+  // Reset errors
+  range.rangeError = '';
+  range.unitError = '';
+
+  let isValid = true;
+
+  if (range.addRange) {
+    if (range.min === null || range.max === null || range.min >= range.max) {
+      range.rangeError = 'Start range must be less than end range';
+      isValid = false;
+    }
+
+    if (!range.unit || range.unit.trim() === '') {
+      range.unitError = 'Unit is required';
+      isValid = false;
     }
   }
 
-
-
-  updateParameterRange(param: string): void {
-    const range = this.parameterRanges[param];
-
-    // Reset errors
-    range.rangeError = '';
-    range.unitError = '';
-
-    let isValid = true;
-
-    if (range.addRange) {
-      if (range.min === null || range.max === null || range.min >= range.max) {
-        range.rangeError = 'Start range must be less than end range';
-        isValid = false;
-      }
-
-      if (!range.unit || range.unit.trim() === '') {
-        range.unitError = 'Unit is required';
-        isValid = false;
-      }
-    }
-
-    // If needed, update other things when valid
-    // if (isValid) {
+  // If needed, update other things when valid
+  // if (isValid) {
     // Valid range/unit - update backend payload, etc.
     // Or leave this space for future extension
-    // }
-  }
+  // }
+}
+
+
 
   onAdditionalInfoChange(event: any): void {
     const value = event.target.value;
     if (event.target.checked) {
       this.selectedAdditionalInfo.push(value);
-    } 
-    else {
+    } else {
       const index = this.selectedAdditionalInfo.indexOf(value);
-    if (index > -1) {
+      if (index > -1) {
         this.selectedAdditionalInfo.splice(index, 1);
-    }
+      }
     }
   }
 
@@ -241,39 +242,39 @@ export class CreateTemplateComponent implements OnInit {
   }
   postTemplate(): void {
     if (this.validateForm()) {
-      const formattedParameters = this.selectedParameters.map(param => {
-        const range = this.parameterRanges[param];
-        if (range && range.addRange) {
-          return `${param}_From_${range.min}_To_${range.max}_Unit_${range.unit}`;
-        } else {
-          return param;
-        }
-      });
+        const formattedParameters = this.selectedParameters.map(param => {
+            const range = this.parameterRanges[param];
+            if (range && range.addRange) {
+                return `${param}_From_${range.min}_To_${range.max}_Unit_${range.unit}`;
+            } else {
+                return param;
+            }
+        });
 
-      const templateObj = {
-        name: this.reportName,
-        report_group: this.groupName,
-        parameters: formattedParameters,
-        additionalInfo: this.selectedAdditionalInfo.join(',')
-      };
+        const templateObj = {
+            name: this.reportName,
+            report_group: this.groupName,
+            parameters: formattedParameters,
+            additionalInfo: this.selectedAdditionalInfo.join(',')
+        };
 
-      console.log('Data to be sent:', templateObj);
+        console.log('Data to be sent:', templateObj);
 
-      this.http.post(`${this.apiBaseUrl}/createTemplate`, templateObj, { responseType: 'json' })
-        .subscribe(
-          (successResponse: any) => {
-            console.log("Response: ", successResponse);
-            alert("Template added successfully");
-            this.resetForm();
-          },
-          (error) => {
-            console.error('Error posting template', error);
-          }
-        );
+        this.http.post(`${this.apiBaseUrl}/createTemplate`, templateObj, { responseType: 'json' })
+            .subscribe(
+                (successResponse: any) => {
+                    console.log("Response: ", successResponse);
+                    alert("Template added successfully");
+                    this.resetForm();
+                },
+                (error) => {
+                    console.error('Error posting template', error);
+                }
+            );
     } else {
-      console.log('Validation failed');
+        console.log('Validation failed');
     }
-  }
+}
 
 
   @HostListener('document:click', ['$event'])

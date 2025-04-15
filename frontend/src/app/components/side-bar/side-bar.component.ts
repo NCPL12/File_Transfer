@@ -20,9 +20,9 @@ export class SideBarComponent implements OnInit {
   }
 
   navigateTo(route: string) {
-    this.router.navigate([route]);  
+    this.router.navigateByUrl(`/${route}`);
   }
-
+  
   isActiveRoute(route: string): boolean {
     return this.router.url === `/${route}`;
   }

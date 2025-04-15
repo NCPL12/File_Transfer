@@ -9,6 +9,7 @@ import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { LogReportComponent } from './components/log-report/log-report.component';
 import { AboutComponent } from './components/about/about.component';
 import { AuditReportComponent } from './components/audit-report/audit-report.component';
+import { SyngeneAuditComponent } from './components/syngene-audit/syngene-audit.component';
 
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
@@ -20,6 +21,8 @@ export const routes: Routes = [
   { path: 'dashboard', component: DashboardComponent, canActivate: [AuthGuard]  },
   { path: 'log-report', component: LogReportComponent, canActivate: [AuthGuard]  },
   { path: 'audit-report', component: AuditReportComponent, canActivate: [AuthGuard]  },
+
+  { path: 'syngene-audit-report', component: SyngeneAuditComponent, canActivate: [AuthGuard] },  
   { path: 'about', component: AboutComponent, canActivate: [AuthGuard]  },
   { path: '', redirectTo: '/login', pathMatch: 'full' }, 
   { path: '**', redirectTo: '/login' }  
