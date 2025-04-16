@@ -68,112 +68,110 @@ public class SyngeneAuditReportService {
         List<AuditLogDTO> logs = fetchAuditLogs(startDate, endDate);
 
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            Document document = new Document(PageSize.A4.rotate(), 36, 36, 60, 50);
+            Document document = new Document(PageSize.A4.rotate(), 36, 36, 160, 50);
             PdfWriter writer = PdfWriter.getInstance(document, out);
 
             writer.setPageEvent(new PdfPageEventHelper() {
+                Font titleFont = new Font(Font.HELVETICA, 16, Font.BOLD);
+                Font dateFont = new Font(Font.HELVETICA, 11);
+                Font footerFont = new Font(Font.HELVETICA, 9);
+                Image logo;
+
+                {
+                    try {
+                        logo = Image.getInstance(new ClassPathResource("static/images/logo.png").getURL());
+                        logo.scaleToFit(100, 50);
+                    } catch (IOException e) {
+                        log.error("Error loading logo image", e);
+                    }
+                }
+
                 @Override
                 public void onEndPage(PdfWriter writer, Document document) {
                     try {
                         PdfContentByte cb = writer.getDirectContent();
-                        Font footerFont = new Font(Font.HELVETICA, 9);
+                        PdfPTable headerTable = new PdfPTable(2);
+                        headerTable.setWidths(new float[]{1f, 5f});
+                        headerTable.setTotalWidth(document.getPageSize().getWidth() - document.leftMargin() - document.rightMargin());
+                        headerTable.setLockedWidth(true);
+
+                        PdfPCell logoCell = new PdfPCell();
+                        logoCell.setBorder(Rectangle.NO_BORDER);
+                        if (logo != null) {
+                            logo.setAlignment(Image.ALIGN_LEFT);
+                            logoCell.addElement(logo);
+                        }
+                        headerTable.addCell(logoCell);
+
+                        Paragraph titlePara = new Paragraph("S20 Building Audit Trail Report", titleFont);
+                        titlePara.setAlignment(Element.ALIGN_CENTER);
+                        titlePara.setIndentationLeft(-80f);
+
+                        PdfPCell titleCell = new PdfPCell();
+                        titleCell.setBorder(Rectangle.NO_BORDER);
+                        titleCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+                        titleCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+                        titleCell.addElement(titlePara);
+                        headerTable.addCell(titleCell);
+
+                        headerTable.writeSelectedRows(0, -1, document.leftMargin(), document.getPageSize().getHeight() - 30, cb);
+
+                        PdfPTable dateTable = new PdfPTable(2);
+                        dateTable.setWidths(new float[]{1f, 1f});
+                        dateTable.setTotalWidth(document.getPageSize().getWidth() - document.leftMargin() - document.rightMargin());
+                        dateTable.setLockedWidth(true);
+
+                        String formattedStart = formatDate(startDate);
+                        String formattedEnd = formatDate(endDate);
+
+                        PdfPCell leftCell = new PdfPCell();
+                        leftCell.setBorder(Rectangle.NO_BORDER);
+                        leftCell.setPaddingBottom(5);
+                        leftCell.addElement(new Paragraph("Start Date: " + formattedStart.split(" ")[0], dateFont));
+                        leftCell.addElement(new Paragraph("Start Time: " + formattedStart.split(" ")[1], dateFont));
+
+                        PdfPCell rightCell = new PdfPCell();
+                        rightCell.setBorder(Rectangle.NO_BORDER);
+                        rightCell.setPaddingBottom(5);
+                        rightCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+
+                        Paragraph endDatePara = new Paragraph("End Date: " + formattedEnd.split(" ")[0], dateFont);
+                        endDatePara.setAlignment(Element.ALIGN_RIGHT);
+                        Paragraph endTimePara = new Paragraph("End Time: " + formattedEnd.split(" ")[1], dateFont);
+                        endTimePara.setAlignment(Element.ALIGN_RIGHT);
+
+                        rightCell.addElement(endDatePara);
+                        rightCell.addElement(endTimePara);
+
+                        dateTable.addCell(leftCell);
+                        dateTable.addCell(rightCell);
+                        dateTable.writeSelectedRows(0, -1, document.leftMargin(), document.getPageSize().getHeight() - 120, cb);
+
                         String generatedOn = "Generated on: " + new SimpleDateFormat("dd-MMM-yyyy HH:mm:ss").format(new Date());
                         String pageNumber = "Page " + writer.getPageNumber();
 
                         ColumnText.showTextAligned(cb, Element.ALIGN_LEFT, new Phrase(generatedOn, footerFont), document.leftMargin(), 30, 0);
                         ColumnText.showTextAligned(cb, Element.ALIGN_CENTER, new Phrase(pageNumber, footerFont), (document.right() + document.left()) / 2, 30, 0);
+
                     } catch (Exception e) {
-                        log.error("Footer generation error", e);
+                        log.error("Header/footer generation error", e);
+                    }
+                }
+
+                private String formatDate(String raw) {
+                    try {
+                        SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                        Date date = inputFormat.parse(raw);
+                        SimpleDateFormat outputFormat = new SimpleDateFormat("dd-MMM-yyyy HH:mm");
+                        return outputFormat.format(date);
+                    } catch (Exception e) {
+                        return raw;
                     }
                 }
             });
 
             document.open();
 
-            // Logo + Title Header Table
-            PdfPTable headerTable = new PdfPTable(2);
-            headerTable.setWidthPercentage(100);
-            headerTable.setWidths(new float[]{1f, 5f});
-            headerTable.setSpacingAfter(10f);
-
-            PdfPCell logoCell = new PdfPCell();
-            logoCell.setBorder(Rectangle.NO_BORDER);
-            try {
-                Image logo = Image.getInstance(new ClassPathResource("static/images/logo.png").getURL());
-                logo.scaleToFit(100, 50);
-                logo.setAlignment(Image.ALIGN_LEFT);
-                logoCell.addElement(logo);
-            } catch (IOException e) {
-                log.error("Error loading logo image", e);
-            }
-            headerTable.addCell(logoCell);
-
-            Font titleFont = new Font(Font.HELVETICA, 16, Font.BOLD);
-            Paragraph titlePara = new Paragraph("S20 Building Audit Trail Report", titleFont);
-            titlePara.setAlignment(Element.ALIGN_CENTER);
-            titlePara.setIndentationLeft(-80f); // Slight left shift
-
-            PdfPCell titleCell = new PdfPCell();
-            titleCell.setBorder(Rectangle.NO_BORDER);
-            titleCell.addElement(titlePara);
-            titleCell.setHorizontalAlignment(Element.ALIGN_CENTER);
-            titleCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
-            headerTable.addCell(titleCell);
-
-            document.add(headerTable);
-
-            // Date Formatting
-            SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-            SimpleDateFormat outputFormat = new SimpleDateFormat("dd-MMM-yyyy HH:mm");
-
-            String formattedStartDate = startDate;
-            String formattedEndDate = endDate;
-
-            try {
-                Date start = inputFormat.parse(startDate);
-                Date end = inputFormat.parse(endDate);
-                formattedStartDate = outputFormat.format(start);
-                formattedEndDate = outputFormat.format(end);
-            } catch (Exception e) {
-                log.warn("Unable to format start/end dates", e);
-            }
-
-            // Split date and time and align properly
-            Font dateFont = new Font(Font.HELVETICA, 11);
-            PdfPTable dateTable = new PdfPTable(2);
-            dateTable.setWidthPercentage(100);
-            dateTable.setWidths(new float[]{1f, 1f});
-            dateTable.setSpacingBefore(4f);
-            dateTable.setSpacingAfter(4f);
-
-            // Start Date (Left Aligned)
-            Paragraph startDatePara = new Paragraph("Start Date: " + formattedStartDate.split(" ")[0], dateFont);
-            startDatePara.setAlignment(Element.ALIGN_LEFT);
-            Paragraph startTimePara = new Paragraph("Start Time: " + formattedStartDate.split(" ")[1], dateFont);
-            startTimePara.setAlignment(Element.ALIGN_LEFT);
-
-            PdfPCell leftCell = new PdfPCell();
-            leftCell.setBorder(Rectangle.NO_BORDER);
-            leftCell.addElement(startDatePara);
-            leftCell.addElement(startTimePara);
-
-            // End Date (Right Aligned)
-            Paragraph endDatePara = new Paragraph("End Date: " + formattedEndDate.split(" ")[0], dateFont);
-            endDatePara.setAlignment(Element.ALIGN_RIGHT);
-            Paragraph endTimePara = new Paragraph("End Time: " + formattedEndDate.split(" ")[1], dateFont);
-            endTimePara.setAlignment(Element.ALIGN_RIGHT);
-
-            PdfPCell rightCell = new PdfPCell();
-            rightCell.setBorder(Rectangle.NO_BORDER);
-            rightCell.addElement(endDatePara);
-            rightCell.addElement(endTimePara);
-
-            dateTable.addCell(leftCell);
-            dateTable.addCell(rightCell);
-
-            document.add(dateTable);
-
-            // Data Table
             PdfPTable table = new PdfPTable(7);
             table.setWidthPercentage(100);
             table.setWidths(new float[]{3f, 2f, 4f, 2f, 2f, 2f, 2f});

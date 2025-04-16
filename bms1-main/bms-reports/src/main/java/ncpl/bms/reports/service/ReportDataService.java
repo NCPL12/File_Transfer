@@ -198,9 +198,6 @@ public class ReportDataService {
 
         return getReportData(templateId, fromDateMillis, toDateMillis);
     }
-    /**
-     * Helper method to convert a timestamp string into milliseconds.
-     */
     private long convertTimestampToMillis(String timestamp) {
         // Normalize the timestamp to ensure 3 digits for milliseconds
         if (timestamp.contains(".")) {
@@ -211,20 +208,11 @@ public class ReportDataService {
                 timestamp = timestamp + "0"; // Pad with one zero
             }
         }
-
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
         LocalDateTime dateTime = LocalDateTime.parse(timestamp, formatter);
         return dateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
     }
-
-
-
-
-
-
-
 // ✅ FIX getReportData method to filter only valid columns before building SELECT query
-
     public List<Map<String, Object>> getReportData(Long templateId, String fromDate, String toDate) {
         ReportTemplate template = templateService.getById(templateId);
         List<String> allParams = template.getParameters();
