@@ -1,0 +1,31 @@
+<div class="log-container">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+      <div class="heading">Alarm Report</div>
+      <div class="download-section" style="display: flex; gap: 15px; align-items: center;">
+        <div>
+            <div class="download-section">
+                <div>
+                    <input style="margin-right: 15px;" placeholder="From Date" class="textbox-n" type="text" onfocus="(this.type='datetime-local')"
+                        onblur="(this.type='text')" [(ngModel)]="fromDate" id="fromDate" class="options-item" />
+                </div>
+                <div>
+                    <input style="margin-right: 15px;" placeholder="To Date" class="textbox-n" type="text" onfocus="(this.type='datetime-local')"
+                        onblur="(this.type='text')" [(ngModel)]="toDate" id="toDate" class="options-item" />
+                </div>
+                <button 
+                (click)="downloadAlarmReport()" 
+                class="download-btn"
+                [disabled]="!isValidDateRange()"
+              >
+                Download PDF
+              </button>
+              </div>
+        
+ 
+      </div>
+    </div>
+    <div *ngIf="errorMessage" class="error-message" style="color: red; margin-top: 10px; text-align: center;">
+      {{ errorMessage }}
+    </div>
+  </div>
+  

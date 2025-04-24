@@ -1,7 +1,4 @@
-
-
     package ncpl.bms.reports.service;
-    import java.sql.Types;
     import java.text.SimpleDateFormat;
     import java.util.*;
     import java.time.LocalDate;
@@ -286,11 +283,6 @@
     // ✅ NOW close the document
             document.close();
 
-
-    //        document.add(table);
-    //        document.close();
-
-            // Create the PDF file name in the same format as before
             String templateName = templateService.getById(templateId).getName().replaceAll("[^a-zA-Z0-9]", "_"); // Replace non-alphanumeric characters with underscores
             String pdfFileName = templateName + "_" + formattedFromDateTime + "_TO_" + formattedToDateTime + ".pdf";
             Date currentDate = new Date(Calendar.getInstance().getTimeInMillis());
@@ -314,8 +306,6 @@
                 log.info("APPROVER IS {}", assigned_approver);
                 log.info("chk is {} " ,chk);
                 ps.setBoolean(9, chk==1);
-
-
                 return ps;
             });
         }
@@ -343,7 +333,6 @@
     //        return base;
     //    }
 
-
         private Map<String, String> extractFormattedParameterRanges(Long templateId) {
             ReportTemplate template = templateService.getById(templateId);
             if (template == null) {
@@ -370,15 +359,12 @@
             return formattedParameterRanges;
         }
 
-
         private String removeSuffix(String columnName) {
             if (columnName.contains("_From_")) {
                 return columnName.substring(0, columnName.indexOf("_From_"));
             }
             return columnName;
         }
-
-
 
         private static final Pattern RANGE_PATTERN = Pattern.compile("_From_(\\d+(?:\\.\\d+)?)_To_(\\d+(?:\\.\\d+)?)");
         private static final Pattern UNIT_PATTERN = Pattern.compile("_Unit_([a-zA-Z]+)$");
@@ -503,7 +489,6 @@
             table.setHeaderRows(1);
         }
 
-
         private class TablePageEvent extends PdfPageEventHelper {
 
             private final String fromDateTime;
@@ -534,7 +519,6 @@
                     log.warn("Failed to fetch review info for footer", e);
                 }
             }
-
 
             @Override
             public void onStartPage(PdfWriter writer, Document document) {
@@ -584,9 +568,6 @@
 
                     PdfPCell cell3 = new PdfPCell(new Paragraph(""));
                     cell3.setBorder(Rectangle.NO_BORDER);
-
-                    // Report Heading - Centered Below Address
-    //                PdfPCell cell4 = new PdfPCell(new Paragraph( reportHeading, fontTitle));  // Display Report Name
 
                     String dynamicHeading = pdfService.getDynamicReportHeading(templateId);
                     PdfPCell cell4 = new PdfPCell(new Paragraph(dynamicHeading, fontTitle));
@@ -639,7 +620,6 @@
                     cell6.setHorizontalAlignment(Element.ALIGN_RIGHT);
                     cell6.setPaddingRight(5);
 
-                    // Add cells to table
                     headerTable.addCell(cell1);
                     headerTable.addCell(cell2);
                     headerTable.addCell(cell3);
@@ -659,13 +639,11 @@
             public void onEndPage(PdfWriter writer, Document document) {
                 PdfPTable footerTable = new PdfPTable(2);
                 footerTable.setWidthPercentage(100);
-
                 try {
                     footerTable.setWidths(new float[]{50f, 50f});
                 } catch (DocumentException e) {
                     throw new RuntimeException(e);
                 }
-
                 Font fontTitle = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10);
                 LocalDateTime currentDate = LocalDateTime.now();
                 DateTimeFormatter formatter = DateTimeFormatter.ofPattern("d-MMMM-yyyy HH:mm:ss");
@@ -697,8 +675,6 @@
                 pageNumberCell.setHorizontalAlignment(Element.ALIGN_CENTER);
 
                 pageNumberTable.addCell(pageNumberCell);
-
-
                 try {
                     footerTable.setTotalWidth(document.right() - document.left());
                     pageNumberTable.setTotalWidth(document.right() - document.left());
@@ -735,8 +711,6 @@
                     rs.getString("assigned_approver")
             ));
         }
-
-
         public ReportDTO getReportById(Long reportId) {
             String sql = "SELECT name, from_date, to_date, pdf_data, generated_by, generated_date, is_approved, approved_by, approved_date, assigned_review, reviewed_by, review_date, is_approver_required, assigned_approver FROM stored_reports WHERE id = ?";
             return jdbcTemplate.queryForObject(sql, new Object[]{reportId}, (rs, rowNum) -> new ReportDTO(
@@ -783,8 +757,6 @@
             String formattedDate = now.format(formatter);
 
             Font font = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10);
-
-            // Create "Reviewed By" table
             PdfPTable reviewTable = new PdfPTable(1);
             reviewTable.setTotalWidth(180);
             reviewTable.setWidthPercentage(100);

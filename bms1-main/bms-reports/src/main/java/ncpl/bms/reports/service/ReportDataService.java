@@ -41,86 +41,11 @@ public class ReportDataService {
 
     @Autowired
     private ReportTemplateService templateService;
-
-//    /**
-//     *
-//     * @param fromDate
-//     * @param toDate
-//     * @return
-//     */
-
-
-//    public List<Map<String, Object>> generateReportData(Long templateId, String fromDate, String toDate){
-//        List<Integer> reportIds = new ArrayList<>();
-//        List<String> tables = tableInfoService.getTables();
-//        int max = 0;
-//        String tableWithMaxRecords = null;
-//        for (String tableName:tables) {
-//            String sql = "SELECT COUNT(*) FROM "+tableName + " where timestamp between " +fromDate+ " AND "+ toDate;
-//            int count = jdbcTemplate.queryForObject(sql, Integer.class);
-//            if(count > max) {
-//                max = count;
-//                tableWithMaxRecords = tableName;
-//            }
-//        }
-//        log.info("Table with maximum records {} ", tableWithMaxRecords);
-//
-//        /**
-//         * This code will perform an insert operation for first column only and return
-//         * the report_ids of all the records in a list.
-//         */
-//      //  String firstTable = tables.get(0); //Starting from first table, this will act as column 1 in report_data table
-//        String sql = "SELECT value, timestamp FROM "+tableWithMaxRecords+ " where timestamp between " +fromDate+ " AND "+ toDate;
-//
-//
-//        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
-//
-//        for (Map<String, Object> row : rows) {
-//            String SQL = "INSERT INTO report_data (timestamp, " + tableWithMaxRecords + ") VALUES ("+row.get("timestamp")+", "+row.get("value")+")";
-//            KeyHolder keyHolder = new GeneratedKeyHolder();
-//            jdbcTemplate.update(connection -> {
-//                PreparedStatement ps = connection.prepareStatement(SQL, Statement.RETURN_GENERATED_KEYS);
-//                return ps;
-//            }, keyHolder);
-//            /*
-//            this will return the primary key of each record and this PK will be used for updating rest of the columns in DB
-//             */
-//            reportIds.add(keyHolder.getKey().intValue());
-//        }
-//
-//        /**
-//         * This code is used to update the other columns with the help of ids
-//         */
-//        String finalTableWithMaxRecords = tableWithMaxRecords;
-//        List<String> filteredTablesList = tables.stream().filter(t -> !t.equals(finalTableWithMaxRecords))
-//                .collect(Collectors.toList());
-//
-//        for (int i=0; i<filteredTablesList.size() ;i++){
-//            String columnNameToUpdate = filteredTablesList.get(i);
-//            String sqlSelect = "SELECT value FROM "+columnNameToUpdate +" where timestamp between " +fromDate+ " AND "+ toDate;
-//            List<Map<String, Object>> rowsUpdate = jdbcTemplate.queryForList(sqlSelect);
-//            int counter = 0;
-//            for (Map<String, Object> row : rowsUpdate) {
-//                int report_id = reportIds.get(counter);
-//                counter++;
-//                String updateQuery = "UPDATE report_data SET "+columnNameToUpdate+" = ? where report_id ="+report_id;
-//                int result = jdbcTemplate.update(updateQuery, row.get("value"));
-//            }
-//
-//        }
-//        List<Map<String, Object>> reportData = getReportData(templateId, fromDate,  toDate);
-//        return reportData;
-//
-//
-//    }
-
     public List<Map<String, Object>> generateReportData(Long templateId, String fromDateMillis, String toDateMillis) {
         List<String> tables = tableInfoService.getTables();
-
         if (tables == null || tables.isEmpty()) {
             throw new RuntimeException("No tables retrieved from tableInfoService.");
         }
-
         int max = 0;
         String tableWithMaxRecords = null;
 
@@ -130,13 +55,11 @@ public class ReportDataService {
         // STEP 1: Clean previous data if it exists
         String checkSql = "SELECT COUNT(*) FROM report_data WHERE timestamp BETWEEN ? AND ?";
         Integer existingCount = jdbcTemplate.queryForObject(checkSql, new Object[]{fromDate.getTime(), toDate.getTime()}, Integer.class);
-
         if (existingCount != null && existingCount > 0) {
             String deleteSql = "DELETE FROM report_data WHERE timestamp BETWEEN ? AND ?";
             jdbcTemplate.update(deleteSql, fromDate.getTime(), toDate.getTime());
             log.info("Old report data deleted for given date range.");
         }
-
         // STEP 2: Find table with maximum rows
         for (String tableName : tables) {
             String sql = "SELECT COUNT(*) FROM " + tableName + " WHERE timestamp BETWEEN ? AND ?";
@@ -153,7 +76,6 @@ public class ReportDataService {
         }
 
         System.out.println("Table with maximum records: {}"+ tableWithMaxRecords);
-
         final String finalTableWithMaxRecords = tableWithMaxRecords;
 
         // STEP 3: Insert into report_data
@@ -195,7 +117,6 @@ public class ReportDataService {
                 jdbcTemplate.update(updateQuery, row.get("value"), reportId);
             }
         }
-
         return getReportData(templateId, fromDateMillis, toDateMillis);
     }
     private long convertTimestampToMillis(String timestamp) {
@@ -203,26 +124,23 @@ public class ReportDataService {
         if (timestamp.contains(".")) {
             int fractionLength = timestamp.substring(timestamp.indexOf(".") + 1).length();
             if (fractionLength == 1) {
-                timestamp = timestamp + "00"; // Pad with two zeros
+                timestamp = timestamp + "00";
             } else if (fractionLength == 2) {
-                timestamp = timestamp + "0"; // Pad with one zero
+                timestamp = timestamp + "0";
             }
         }
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
         LocalDateTime dateTime = LocalDateTime.parse(timestamp, formatter);
         return dateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
     }
-// ✅ FIX getReportData method to filter only valid columns before building SELECT query
     public List<Map<String, Object>> getReportData(Long templateId, String fromDate, String toDate) {
         ReportTemplate template = templateService.getById(templateId);
         List<String> allParams = template.getParameters();
-
         // Step 1: Fetch valid column names from report_data table
         List<String> validColumns = jdbcTemplate.queryForList(
                 "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'report_data'",
                 String.class
         );
-
         // Step 2: Sanitize parameters (remove suffixes) and filter only existing columns
         List<String> safeColumns = allParams.stream()
                 .map(this::removeSuffix) // remove _From_, _To_, _Unit_
@@ -231,6 +149,7 @@ public class ReportDataService {
                 .collect(Collectors.toList());
 
         // Step 3: Prepare final SELECT clause
+
         StringBuilder columns = new StringBuilder("timestamp");
         for (String column : safeColumns) {
             columns.append(", ").append(column);
@@ -239,8 +158,6 @@ public class ReportDataService {
         String sqlSelect = "SELECT " + columns + " FROM report_data WHERE timestamp BETWEEN ? AND ?";
         return jdbcTemplate.queryForList(sqlSelect, fromDate, toDate);
     }
-
-    // ✅ Enhanced removeSuffix to handle all suffixes
     private String removeSuffix(String columnName) {
         String base = columnName;
         if (base.contains("_From_")) {
@@ -254,11 +171,6 @@ public class ReportDataService {
         }
         return base;
     }
-
-    //------------------Vishal (Code Added)
-
-
-
     public Map<String, Map<String, Integer>> calculateStatistics(Long templateId, String fromDate, String toDate) {
         ReportTemplate template = templateService.getById(templateId);
         Map<String, Map<String, Integer>> statistics = new LinkedHashMap<>(); // Use LinkedHashMap to maintain order
@@ -278,10 +190,8 @@ public class ReportDataService {
             statMap.put("avg", convertToInteger(result.get("avg_val")));
             statistics.put(cleanParameter, statMap);
         }
-
         return statistics;
     }
-
     private Integer convertToInteger(Object value) {
         if (value instanceof Number) {
             return ((Number) value).intValue();

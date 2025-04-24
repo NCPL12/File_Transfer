@@ -5,13 +5,13 @@ import { FormsModule } from '@angular/forms';
 import { environment } from '../../../environments/environment';
 
 @Component({
-  selector: 'app-syngene-audit',
+  selector: 'app-alarm-report',
   standalone: true,
   imports: [CommonModule, FormsModule],
-  templateUrl: './syngene-audit.component.html',
-  styleUrl: './syngene-audit.component.css'
+  templateUrl: './alarm-report.component.html',
+  styleUrl: './alarm-report.component.css'
 })
-export class SyngeneAuditComponent {
+export class AlarmReportComponent {
   fromDate: string = '';
   toDate: string = '';
   errorMessage: string = '';
@@ -19,7 +19,7 @@ export class SyngeneAuditComponent {
 
   constructor(private http: HttpClient) {}
 
-  downloadAuditReport() {
+  downloadAlarmReport() {
     this.errorMessage = '';
 
     if (!this.isValidDateRange()) {
@@ -34,7 +34,7 @@ export class SyngeneAuditComponent {
 
     const formattedFrom = this.formatDateForSQL(this.fromDate);
     const formattedTo = this.formatDateForSQL(this.toDate);
-    const downloadUrl = `${this.apiBaseUrl}/audit-report/download?startDate=${encodeURIComponent(formattedFrom)}&endDate=${encodeURIComponent(formattedTo)}`;
+    const downloadUrl = `${this.apiBaseUrl}/alarm-report/download?startDate=${encodeURIComponent(formattedFrom)}&endDate=${encodeURIComponent(formattedTo)}`;
     window.open(downloadUrl, '_blank');
   }
 
@@ -49,15 +49,15 @@ export class SyngeneAuditComponent {
   isToDateAfterFromDate(): boolean {
     return new Date(this.toDate) > new Date(this.fromDate);
   }
+
   validateYear(dateString: string, field: 'from' | 'to') {
     const date = new Date(dateString);
     const year = date.getFullYear();
-  
+
     if (year < 1000 || year > 9999) {
       alert(`${field === 'from' ? 'From Date' : 'To Date'} must have a 4-digit year.`);
       if (field === 'from') this.fromDate = '';
       if (field === 'to') this.toDate = '';
     }
   }
-  
 }

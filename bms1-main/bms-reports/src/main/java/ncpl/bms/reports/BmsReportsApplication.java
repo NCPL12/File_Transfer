@@ -12,7 +12,7 @@ package ncpl.bms.reports;
 				description = "This is an API server."
 		)
 )
-@EnableScheduling // Enable scheduling
+@EnableScheduling
 public class BmsReportsApplication {
 
 	public static void main(String[] args) {

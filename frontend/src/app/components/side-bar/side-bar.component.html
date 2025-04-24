@@ -24,10 +24,15 @@
              [ngClass]="{'active-route': isActiveRoute('audit-report')}">
             <img src="../../../assets/images/log.png" class="nav-item-img" title="Audit Report">
         </div>
+       
      <!-- Sidebar button -->
 <div class="nav-item" (click)="navigateTo('syngene-audit-report')"
 [ngClass]="{'active-route': isActiveRoute('syngene-audit-report')}">
-<img src="../../../assets/images/log.png" class="nav-item-img" title="Syngene Audit Report">
+<img src="../../../assets/images/auicon.ico" class="nav-item-img" title="Syngene Audit Report">
+</div>
+<div *ngIf="userRole === 'admin'" class="nav-item" (click)="navigateTo('alarm-report')" 
+[ngClass]="{'active-route': isActiveRoute('alarm-report')}">
+<img src="../../../assets/images/light-blue-button-alarm-isolated-round-icon-125327412.ico" class="nav-item-img" title="Alarm Report">
 </div>
     </div>
     <div>

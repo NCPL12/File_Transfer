@@ -44,7 +44,6 @@ public class SyngeneAuditReportService {
             return dto;
         });
     }
-
     private String formatTimestamp(String rawTimestamp) {
         try {
             SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
@@ -56,27 +55,22 @@ public class SyngeneAuditReportService {
             return rawTimestamp;
         }
     }
-
     private PdfPCell createCenterCell(String text, Font font) {
         PdfPCell cell = new PdfPCell(new Phrase(text != null ? text : "", font));
         cell.setHorizontalAlignment(Element.ALIGN_CENTER);
         cell.setVerticalAlignment(Element.ALIGN_MIDDLE);
         return cell;
     }
-
     public byte[] generateAuditReportPdf(String startDate, String endDate) {
         List<AuditLogDTO> logs = fetchAuditLogs(startDate, endDate);
-
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Document document = new Document(PageSize.A4.rotate(), 36, 36, 160, 50);
             PdfWriter writer = PdfWriter.getInstance(document, out);
-
             writer.setPageEvent(new PdfPageEventHelper() {
                 Font titleFont = new Font(Font.HELVETICA, 16, Font.BOLD);
                 Font dateFont = new Font(Font.HELVETICA, 11);
                 Font footerFont = new Font(Font.HELVETICA, 9);
                 Image logo;
-
                 {
                     try {
                         logo = Image.getInstance(new ClassPathResource("static/images/logo.png").getURL());
@@ -85,7 +79,6 @@ public class SyngeneAuditReportService {
                         log.error("Error loading logo image", e);
                     }
                 }
-
                 @Override
                 public void onEndPage(PdfWriter writer, Document document) {
                     try {
@@ -157,7 +150,6 @@ public class SyngeneAuditReportService {
                         log.error("Header/footer generation error", e);
                     }
                 }
-
                 private String formatDate(String raw) {
                     try {
                         SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
@@ -168,10 +160,10 @@ public class SyngeneAuditReportService {
                         return raw;
                     }
                 }
+
             });
 
             document.open();
-
             PdfPTable table = new PdfPTable(7);
             table.setWidthPercentage(100);
             table.setWidths(new float[]{3f, 2f, 4f, 2f, 2f, 2f, 2f});
@@ -197,11 +189,9 @@ public class SyngeneAuditReportService {
                 table.addCell(createCenterCell(log.getValue(), cellFont));
                 table.addCell(createCenterCell(log.getUserName(), cellFont));
             }
-
             document.add(table);
             document.close();
             return out.toByteArray();
-
         } catch (Exception e) {
             log.error("Error generating audit report PDF", e);
             return null;

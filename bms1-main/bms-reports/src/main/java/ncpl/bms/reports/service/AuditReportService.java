@@ -170,8 +170,6 @@ public class AuditReportService {
         String sql = "SELECT * FROM audit_report ORDER BY timestamp DESC";
         return jdbcTemplate.queryForList(sql);
     }
-
-
     public ByteArrayInputStream generateAuditReportPdf(String fromDateStr, String toDateStr) {
         Document document = new Document(PageSize.A4);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -222,9 +220,6 @@ public class AuditReportService {
         }
         return new ByteArrayInputStream(out.toByteArray());
     }
-
-
-    // Convert date string to milliseconds
     private long convertToMillis(String dateStr) {
         try {
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
