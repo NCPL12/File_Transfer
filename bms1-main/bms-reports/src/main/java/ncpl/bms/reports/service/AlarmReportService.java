@@ -1,5 +1,4 @@
 package ncpl.bms.reports.service;
-
 import com.lowagie.text.*;
 import com.lowagie.text.Font;
 import com.lowagie.text.Image;
@@ -11,7 +10,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-
 import java.awt.*;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -31,7 +29,7 @@ public class AlarmReportService {
 
     public List<AlarmRecordDTO> fetchAlarmLogs(long startMillis, long endMillis) {
         String sql = "SELECT " +
-                "r.[timestamp], r.[sourceState], r.[ackState], r.[alarmClass], " +
+                "r.[timestamp],  r.[ackState], r.[alarmClass], " +
                 "r.[normalTime], r.[ackTime], s.[source] " +
                 "FROM [JCIHistorianDB].[dbo].[OrionAlarmRecord] r " +
                 "LEFT JOIN [JCIHistorianDB].[dbo].[OrionAlarmSourceOrder] o ON r.[id] = o.[id] " +
@@ -42,7 +40,7 @@ public class AlarmReportService {
             AlarmRecordDTO dto = new AlarmRecordDTO();
             dto.setTimestamp(rs.getLong("timestamp"));
             dto.setSource(extractSourceName(rs.getString("source")));
-            dto.setSourceState(rs.getLong("sourceState"));
+//            dto.setSourceState(rs.getLong("sourceState"));
             dto.setAckState(rs.getLong("ackState"));
             dto.setAlarmClass(rs.getLong("alarmClass"));
             dto.setNormalTime(rs.getLong("normalTime"));
@@ -96,14 +94,31 @@ public class AlarmReportService {
         cell.setBorder(Rectangle.BOX);
         return cell;
     }
+    private String getAlarmClassLabel(Long alarmClass) {
+        if (alarmClass == null) return "Unknown";
+        switch (alarmClass.intValue()) {
+            case 0: return "Normal";
+            case 1: return "Critical";
+            case 2: return "Default";
+            default: return "Unknown";
+        }
+    }
+    private String getAckClassLabel(Long ackClass) {
+        if (ackClass == null) return "Unknown";
+        switch (ackClass.intValue()) {
+            case 0: return "Ack";
+            case 1: return "Unacked";
+            default: return "Unknown";
+        }
+    }
 
     private PdfPTable createAlarmTable(Font headerFont) throws DocumentException {
-        PdfPTable table = new PdfPTable(7);
+        PdfPTable table = new PdfPTable(6);
         table.setWidthPercentage(100);
-        table.setWidths(new float[]{5f, 5f, 5f, 5f, 3f, 3f, 3f});
+        table.setWidths(new float[]{5f, 5f, 5f, 3f, 3f, 3f});
         table.setHeaderRows(1);
 
-        String[] headers = {"Timestamp", "Source Name", "Source State", "Ack State", "Message text", "Alarm Class", "Normal Time"};
+        String[] headers = {"Timestamp", "Source Name", "Ack State", "Message text", "Alarm Class", "Normal Time"};
         for (String h : headers) {
             PdfPCell header = new PdfPCell(new Phrase(h, headerFont));
             header.setBackgroundColor(Color.LIGHT_GRAY);
@@ -229,10 +244,10 @@ public class AlarmReportService {
             for (AlarmRecordDTO log : logs) {
                 table.addCell(createCell(formatEpoch(log.getTimestamp()), cellFont));
                 table.addCell(createCell(log.getSource(), cellFont));
-                table.addCell(createCell(String.valueOf(log.getSourceState()), cellFont));
-                table.addCell(createCell(String.valueOf(log.getAckState()), cellFont));
+//                table.addCell(createCell(String.valueOf(log.getSourceState()), cellFont));
+                table.addCell(createCell(getAckClassLabel(log.getAckState()), cellFont));
                 table.addCell(createCell("HUMIDITY NORMAL", cellFont));
-                table.addCell(createCell(String.valueOf(log.getAlarmClass()), cellFont));
+                table.addCell(createCell(getAlarmClassLabel(log.getAlarmClass()), cellFont));
                 table.addCell(createCell(formatEpoch(log.getNormalTime()), cellFont));
             }
 
